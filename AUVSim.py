@@ -14,7 +14,7 @@ MAX_CLICK_DISTANCE = 10
 AUV_SHAPE = ((0,0),(10,-0.75*math.pi),(10,0),(10,0.75*math.pi)) # Stored in polar coords
 SELECT_RADIUS = 10
 if sys.platform == "win32":
-    INFO_BOX_WIDTH = 24
+    INFO_BOX_WIDTH = 32
 else:
     INFO_BOX_WIDTH = 40
 MIN_WINDOW_DIM = (726, 402)
@@ -98,12 +98,18 @@ class AUVSim:
         self.rootWindow.config(menu=self.menubar)
         fileMenu = tk.Menu(self.menubar)
         self.menubar.add_cascade(label="File",menu=fileMenu)
-        
+        viewMenu = tk.Menu(self.menubar)
+        self.showDebugInfo = False
+        viewMenu.add_checkbutton(label="Toggle Debug Info", command = self.toggleDebugInfo)
+        self.menubar.add_cascade(label="View",menu=viewMenu)
+
+        # Set minimum and initial window size
         self.rootWindow.update()
         self.rootWindow.minsize(*MIN_WINDOW_DIM)
         self.rootWindow.geometry(f"{INIT_WINDOW_DIM[0]}x{INIT_WINDOW_DIM[1]}")
         
         # Callback for resizing the window
+        self.rootWindow.update()
         self.rootWindow.bind("<Configure>", self.resizeWindow)
     
     def start(self):
@@ -125,7 +131,10 @@ class AUVSim:
         self.stepCount += 1
         self.lastTime = newTime
         self.rootWindow.after(LOOP_DELAY, self.loop)
-        
+
+    def toggleDebugInfo(self):
+        self.showDebugInfo = not self.showDebugInfo
+    
     def updateInfoBox1(self):
         if(self.selectedAUV == None):
             self.infoBox1.config(text="")
@@ -221,7 +230,8 @@ class AUVSim:
     
     def updateMainDisplayInfo(self):
         self.mainDisplay.delete("info")
-        self.mainDisplay.create_text(5,5,text=f"{self.lastTime - self.startTime:.2f}",fill="white",tag="info",anchor="nw")
+        if(self.showDebugInfo):
+            self.mainDisplay.create_text(5,5,text=f"{self.lastTime - self.startTime:.2f}",fill="white",tag="info",anchor="nw")
     
     def updateSimulation(self, timestep = 1):
         for auv in self.auvs:
