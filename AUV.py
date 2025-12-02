@@ -15,7 +15,6 @@ class AUV:
             self.constants = AUVConstants()
         else:
             self.constants = constants
-        #self.initializeConstants()
         self.initializeKinematics(position, heading)
         self.setAutonomy(autonomyInfo)
     
@@ -37,17 +36,6 @@ class AUV:
             self.autonomyMode = 2
         else:
             self.autonomyMode = 0 # No autonomy
-        
-    def initializeConstants(self):
-        self.constants = AUV.AUVConstants()
-        
-        self.constants.mass = AUV_MASS
-        self.constants.momentsOfInertia = np.array([[AUV_MOMENT_X], [AUV_MOMENT_Y], [AUV_MOMENT_Z]])
-        self.constants.dragConstants = np.array([[LINEAR_DRAG_CONSTANT_X, LINEAR_DRAG_CONSTANT_Y, LINEAR_DRAG_CONSTANT_Z],\
-                                       [ROTATIONAL_DRAG_CONSTANT_X, ROTATIONAL_DRAG_CONSTANT_Y, ROTATIONAL_DRAG_CONSTANT_Z]]).T
-        self.constants.maxMotorForces = np.array([[[MAX_MOTOR_FORCE, 0], [0,0], [0, -MAX_MOTOR_FORCE*AUV_WIDTH/2]],\
-                                         [[MAX_MOTOR_FORCE, 0], [0,0], [0, MAX_MOTOR_FORCE*AUV_WIDTH/2]]])
-        self.constants.throttleRanges = np.array([[MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE], [MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE]])
         
     def initializeKinematics(self, initPosition, initHeading):
         self.writeLog(f"Initialize {self.name} kinematics")
