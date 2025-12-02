@@ -13,6 +13,12 @@ SIM_SPEED = 5
 MAX_CLICK_DISTANCE = 10
 AUV_SHAPE = ((0,0),(10,-0.75*math.pi),(10,0),(10,0.75*math.pi)) # Stored in polar coords
 SELECT_RADIUS = 10
+if sys.platform == "win32":
+    INFO_BOX_WIDTH = 24
+else:
+    INFO_BOX_WIDTH = 40
+MIN_WINDOW_DIM = (726, 402)
+INIT_WINDOW_DIM = (726, 402)
 AUV_COLOR = "white"
 AUV_SELECT_COLOR = "yellow"
 DISPLAY_COLOR = "black"
@@ -80,7 +86,7 @@ class AUVSim:
         # Info Box
         self.infoFrame = tk.Frame(self.rootWindow)
         self.infoFrame.grid(row = 0, column = 1, sticky = "nsew")
-        tk.Label(self.infoFrame, text="Info", width = 24).grid(row = 0, column = 0, columnspan = 2, sticky = "ew")
+        tk.Label(self.infoFrame, text="Info", width = INFO_BOX_WIDTH).grid(row = 0, column = 0, columnspan = 2, sticky = "ew")
         self.infoBox1 = tk.Label(self.infoFrame)
         self.infoBox1.grid(row = 1, column = 0, sticky = "nsew")
         self.infoBox2 = tk.Label(self.infoFrame)
@@ -92,6 +98,13 @@ class AUVSim:
         self.rootWindow.config(menu=self.menubar)
         fileMenu = tk.Menu(self.menubar)
         self.menubar.add_cascade(label="File",menu=fileMenu)
+        
+        self.rootWindow.update()
+        self.rootWindow.minsize(*MIN_WINDOW_DIM)
+        self.rootWindow.geometry(f"{INIT_WINDOW_DIM[0]}x{INIT_WINDOW_DIM[1]}")
+        
+        # Callback for resizing the window
+        self.rootWindow.bind("<Configure>", self.resizeWindow)
     
     def start(self):
         self.lastTime = time.time()
@@ -154,8 +167,7 @@ class AUVSim:
         #update zoom level
         newZoomLevel = self.zoomLevel * (ZOOM_RATE ** scrollDelta)
         newZoomLevel = max(MIN_ZOOM_LEVEL, min(MAX_ZOOM_LEVEL, newZoomLevel))
-        #FIXME: update center of screen so that we're zooming towards the top left
-        #print(f"{event.x}, {event.y}")
+        
         deltaInvZoom = 1/newZoomLevel-1/self.zoomLevel
         self.mapOffset[0] += mousePos[0]*deltaInvZoom
         self.mapOffset[1] += mousePos[1]*deltaInvZoom
@@ -173,6 +185,11 @@ class AUVSim:
             self.writeLog(f"Unrecongnized event num in zoomLinux: {event.num}")
             return
     
+    def resizeWindow(self, event):
+        if event.widget != self.rootWindow:
+            return
+        self.mainDisplay.config(width = event.width-self.infoFrame.winfo_width()-2,\
+                                height = event.height-self.menubar.winfo_height()-2)
 
     def centerMovingMap(self, event):
         self.mapOffset = [0,0]
