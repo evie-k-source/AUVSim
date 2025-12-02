@@ -4,9 +4,9 @@ from datetime import datetime
 import numpy as np
 import math
 
-LOOP_DELAY=1
-SIM_SPEED = 5
-MAX_CLICK_DISTANCE=10
+LOOP_DELAY = 1
+SIM_SPEED = 1
+MAX_CLICK_DISTANCE = 10
 AUV_SHAPE = ((0,0),(10,-0.75*math.pi),(10,0),(10,0.75*math.pi)) # Stored in polar coords
 SELECT_RADIUS = 10
 AUV_COLOR = "white"
@@ -220,7 +220,7 @@ class AUV:
         # Implementation of PD controller for now
         # TODO: implement actual motor controller
         # TODO: PID Controller
-        # Update motor power
+        # Update motor throttles
         # Uses target velocity of the AUV to determine motor power
         if(self.autonomyMode == 0):
             self.motorThrottle = np.zeros(2)
@@ -258,6 +258,7 @@ class AUV:
                          [LINEAR_DRAG_CONSTANT_Z * self.bodyLinearVelocity[2,0], ROTATIONAL_DRAG_CONSTANT_Z * self.bodyAngularVelocity[2,0]*np.abs(self.bodyAngularVelocity[2,0])]])
         force = force + drag
         self.bodyLinearVelocity = self.bodyLinearVelocity + force[:,[0]]/AUV_MASS*timestep
+	# FIXME: Should be moment of inertia instead of mass
         self.bodyAngularVelocity = self.bodyAngularVelocity + force[:,[1]]/AUV_MASS*timestep
     
     def updateKinematics(self, timestep = 1):
