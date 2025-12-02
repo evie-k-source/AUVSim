@@ -30,12 +30,9 @@
 			"name": "Eurydice",
 			"model": "Orpheus",
 			"autonomy": {
-				"type": "p2p",
-				"targets": [
-					[200,150,-50],
-					[150,236.6,-50],
-					[250,236.6,-50]
-				]
+				"type": "follow",
+				"target": "Orpheus",
+				"offset": [10, 0, 0]
 			}
 		}
 	]

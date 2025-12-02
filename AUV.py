@@ -54,25 +54,32 @@ class AUV:
         self.updateDynamics(timestep)
         self.updateKinematics(timestep)
     
+    def updateSensors(self, timestep = 1):
+        # FIXME: Assumes perfect sensors for the following
+        self.sensorOrientation = np.copy(self.orientation)
+        self.sensorLinearVelocity = np.copy(self.bodyLinearVelocity)
+        self.sensorAngularVelocity = np.copy(self.bodyAngularVelocity)
+        self.sensorPosition = np.copy(self.position)
+    
     def updateAutonomy(self):
         # Uses target position to determine target velocity
         # If AUV reaches target, update to the next point in the list
         if(self.autonomyMode == 0): # No Autonomy
-            self.targetOrientation = self.orientation
+            self.targetOrientation = self.sensorOrientation
             self.targetVelocity = np.zeros([3,1])
             return
         if(self.autonomyMode == 1): # p2p
-            positionError = self.targetPosition - self.position
+            positionError = self.targetPosition - self.sensorPosition
             if(np.mean(np.square(positionError))<4):
                 self.targetIndex = (self.targetIndex + 1) % len(self.targets)
                 self.targetPosition = np.transpose([self.targets[self.targetIndex]])
-                positionError = self.targetPosition - self.position
+                positionError = self.targetPosition - self.sensorPosition
             self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
-            unitVectorOrientation = eulerAngleToUnitVector(self.orientation)
+            unitVectorOrientation = eulerAngleToUnitVector(self.sensorOrientation)
             self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
             return
         if(self.autonomyMode == 2): # follow
-            self.targetOrientation = self.orientation
+            self.targetOrientation = self.sensorOrientation
             self.targetVelocity = np.zeros([3,1])
             return
         self.writeLog("ERROR: Unrecognized Autonomy Mode")
@@ -88,10 +95,10 @@ class AUV:
             return
         angP = 2
         angD = -5
-        orientationError = self.targetOrientation - self.orientation
-        velocityError = self.targetVelocity - self.bodyLinearVelocity
+        orientationError = self.targetOrientation - self.sensorOrientation
+        velocityError = self.targetVelocity - self.sensorLinearVelocity
         necessaryRotation = orientationError[2,0] % (2*math.pi)
-        angVelocity = self.bodyAngularVelocity[2,0]
+        angVelocity = self.sensorAngularVelocity[2,0]
         if(necessaryRotation < math.pi): # Turn Left
             differential = angP*necessaryRotation + angD*angVelocity
         else: # Turn Right

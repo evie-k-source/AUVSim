@@ -274,6 +274,8 @@ class AUVSim:
     
     def updateSimulation(self, timestep = 1):
         for auv in self.auvs:
+            auv.updateSensors(timestep)
+        for auv in self.auvs:
             auv.updateSimulation(timestep)
 
 
