@@ -54,6 +54,6 @@ def eulerAngleToUnitVector(eulerAngles):
                      [np.sin(eulerAngles[1,0])]])
     
 # Use only for GUI updates, not simulation
-def polarToCartesian(polarCoords, angleOffset = 0, cartesianOffset = (0,0)):
-    return (polarCoords[0]*math.cos(polarCoords[1] + angleOffset) + cartesianOffset[0],\
-            polarCoords[0]*math.sin(polarCoords[1] + angleOffset) + cartesianOffset[1])
+def polarToCartesian(polarCoords, angleOffset = 0, cartesianOffset = (0,0), shapeScale = 1):
+    return (polarCoords[0]*shapeScale*math.cos(polarCoords[1] + angleOffset) + cartesianOffset[0],\
+            polarCoords[0]*shapeScale*math.sin(polarCoords[1] + angleOffset) + cartesianOffset[1])
