@@ -19,6 +19,9 @@ DISPLAY_COLOR = "black"
 POI_COLOR = "red"
 POI_RADIUS = 2
 POI_INDICATOR_LENGTH = 0
+MAX_ZOOM_LEVEL = 2
+MIN_ZOOM_LEVEL = 0.25
+ZOOM_RATE = 1.1
 
 
 class AUVSim:
@@ -64,9 +67,15 @@ class AUVSim:
         self.mainDisplay.bind("<Button-1>", self.mainDisplayButton1Handler)
         self.mainDisplay.bind("<Button-2>", self.startMovingMap)
         self.mainDisplay.bind("<ButtonRelease-2>", self.stopMovingMap)
-        self.mainDisplay.bind("<Control-c>", self.centerMovingMap)
+        if sys.platform == "win32":
+            self.mainDisplay.bind("<MouseWheel>", self.zoom)
+        else:
+            self.mainDisplay.bind("<Button-4>", self.zoomLinux)
+            self.mainDisplay.bind("<Button-5>", self.zoomLinux)
+        self.rootWindow.bind("<Control-c>", self.centerMovingMap)
         self.isMovingMap = False
         self.mapOffset = [0,0]
+        self.zoomLevel = np.float64(1.0)
         
         # Info Box
         self.infoFrame = tk.Frame(self.rootWindow)
@@ -118,7 +127,7 @@ class AUVSim:
         minDis = SELECT_RADIUS ** 2
         closestAUV = None
         for auv in self.auvs:
-            auvPosition = (auv.position[0,0] + self.mapOffset[0], auv.position[1,0] + self.mapOffset[1])
+            auvPosition = ((auv.position[0,0] + self.mapOffset[0])*self.zoomLevel, (auv.position[1,0] + self.mapOffset[1])*self.zoomLevel)
             auvDis = (event.x - auvPosition[0]) ** 2 + (event.y - auvPosition[1]) ** 2
             if(auvDis < minDis):
                 minDis = auvDis
@@ -137,12 +146,26 @@ class AUVSim:
 
     def updateMovingMap(self):
         screen_x, screen_y = self.rootWindow.winfo_pointerxy()
-        self.mapOffset[0] += (screen_x - self.lastMouse[0])
-        self.mapOffset[1] += (screen_y - self.lastMouse[1])
+        self.mapOffset[0] += (screen_x - self.lastMouse[0])/self.zoomLevel
+        self.mapOffset[1] += (screen_y - self.lastMouse[1])/self.zoomLevel
         self.lastMouse = (screen_x, screen_y)
 
+    def zoom(self, event):
+        #update zoom level
+        newZoomLevel = self.zoomLevel * ZOOM_RATE ** (event.delta/120)
+        newZoomLevel = max(MIN_ZOOM_LEVEL, min(MAX_ZOOM_LEVEL, newZoomLevel))
+        #FIXME: update center of screen so that we're zooming towards the top left
+        print(f"{event.x}, {event.y}")
+        #self.mapOffset[0] += event.x/self.zoomLevel-
+        #self.mapOffset[1] += event.y/self.zoomLevel*(self.zoomLevel-newZoomLevel)
+        self.zoomLevel = newZoomLevel
+
+    def zoomLinux(self, event):
+        print(f"zoom {event.delta}")
+
     def centerMovingMap(self, event):
-        self.mapOffset = (0,0)
+        self.mapOffset = [0,0]
+        self.zoomLevel = np.float64(1.0)
     
     def redrawMainDisplay(self):
         self.mainDisplay.delete("auv")
@@ -152,15 +175,17 @@ class AUVSim:
             if self.selectedAUV != None and auv.name == self.selectedAUV.name:
                 color = AUV_SELECT_COLOR
                 if(auv.autonomyMode == 1):
-                    targetPosition = (self.selectedAUV.targetPosition[0,0] + self.mapOffset[0], self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])
+                    scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
                     #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
-                    self.mainDisplay.create_oval(targetPosition[0] - POI_RADIUS, targetPosition[1] - POI_RADIUS,\
-                                                 targetPosition[0] + POI_RADIUS, targetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
+                    self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
+                                                 scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
+            scaledPosition = (auvPosition[0] * self.zoomLevel, auvPosition[1] * self.zoomLevel)
+            auvShapeScale = max(1,self.zoomLevel)
             self.mainDisplay.create_polygon(\
-                    polarToCartesian(AUV_SHAPE[0], auv.orientation[2,0], auvPosition) + \
-                    polarToCartesian(AUV_SHAPE[1], auv.orientation[2,0], auvPosition) + \
-                    polarToCartesian(AUV_SHAPE[2], auv.orientation[2,0], auvPosition) + \
-                    polarToCartesian(AUV_SHAPE[3], auv.orientation[2,0], auvPosition),\
+                    polarToCartesian(AUV_SHAPE[0], auv.orientation[2,0], scaledPosition, auvShapeScale) + \
+                    polarToCartesian(AUV_SHAPE[1], auv.orientation[2,0], scaledPosition, auvShapeScale) + \
+                    polarToCartesian(AUV_SHAPE[2], auv.orientation[2,0], scaledPosition, auvShapeScale) + \
+                    polarToCartesian(AUV_SHAPE[3], auv.orientation[2,0], scaledPosition, auvShapeScale),\
                     tag = "auv", fill = color)
     
     def updateSimulation(self, timestep = 1):
