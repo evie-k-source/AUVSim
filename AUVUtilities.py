@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import math
 import time
@@ -7,7 +8,10 @@ from datetime import datetime
 class Logger:
     def __init__(self, logName):
         os.makedirs("logs", exist_ok=True)
-        self.logFile = open(f"logs\\{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}.log", 'w')
+        if sys.platform == "win32":
+            self.logFile = open(f"logs\\{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}.log", 'w')
+        else:
+            self.logFile = open(f"logs/{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}.log", 'w')
         self.logStart = time.time()
         self.write(f"Start Log: {logName}")
     
