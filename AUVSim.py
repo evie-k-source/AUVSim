@@ -150,24 +150,25 @@ class AUVSim:
         self.mapOffset[1] += (screen_y - self.lastMouse[1])/self.zoomLevel
         self.lastMouse = (screen_x, screen_y)
 
-    def zoom(self, delta):
+    def zoom(self, scrollDelta, mousePos = (0,0)):
         #update zoom level
-        newZoomLevel = self.zoomLevel * (ZOOM_RATE ** delta)
+        newZoomLevel = self.zoomLevel * (ZOOM_RATE ** scrollDelta)
         newZoomLevel = max(MIN_ZOOM_LEVEL, min(MAX_ZOOM_LEVEL, newZoomLevel))
         #FIXME: update center of screen so that we're zooming towards the top left
         #print(f"{event.x}, {event.y}")
-        #self.mapOffset[0] += event.x/self.zoomLevel-
-        #self.mapOffset[1] += event.y/self.zoomLevel*(self.zoomLevel-newZoomLevel)
+        deltaInvZoom = 1/newZoomLevel-1/self.zoomLevel
+        self.mapOffset[0] += mousePos[0]*deltaInvZoom
+        self.mapOffset[1] += mousePos[1]*deltaInvZoom
         self.zoomLevel = newZoomLevel
 
     def zoomWindows(self, event):
-        self.zoom(event.delta/120)
+        self.zoom(event.delta/120, (event.x, event.y))
 
     def zoomLinux(self, event):
         if(event.num == 4): #Scroll In
-            self.zoom(1)
+            self.zoom(1, (event.x, event.y))
         elif(event.num == 5): #Scroll Out
-            self.zoom(-1)
+            self.zoom(-1, (event.x, event.y))
         else:
             self.writeLog(f"Unrecongnized event num in zoomLinux: {event.num}")
             return
