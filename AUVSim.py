@@ -107,7 +107,8 @@ class AUVSim:
         self.rootWindow.bind("<Configure>", self.resizeWindow)
     
     def start(self):
-        self.lastTime = time.time()
+        self.startTime = time.time()
+        self.lastTime = self.startTime
         self.rootWindow.after(LOOP_DELAY, self.loop)
         self.rootWindow.mainloop()
         
@@ -118,7 +119,9 @@ class AUVSim:
         if(self.isMovingMap):
             self.updateMovingMap()
         self.redrawMainDisplay()
-        self.updateInfoBox2()
+        if(self.stepCount % 10 == 0):
+            self.updateMainDisplayInfo()
+            self.updateInfoBox2()
         self.stepCount += 1
         self.lastTime = newTime
         self.rootWindow.after(LOOP_DELAY, self.loop)
@@ -215,6 +218,10 @@ class AUVSim:
                     polarToCartesian(AUV_SHAPE[2], auv.orientation[2,0], scaledPosition, auvShapeScale) + \
                     polarToCartesian(AUV_SHAPE[3], auv.orientation[2,0], scaledPosition, auvShapeScale),\
                     tag = "auv", fill = color)
+    
+    def updateMainDisplayInfo(self):
+        self.mainDisplay.delete("info")
+        self.mainDisplay.create_text(5,5,text=f"{self.lastTime - self.startTime:.2f}",fill="white",tag="info",anchor="nw")
     
     def updateSimulation(self, timestep = 1):
         for auv in self.auvs:
