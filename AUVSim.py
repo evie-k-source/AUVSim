@@ -5,6 +5,7 @@ import numpy as np
 import math
 
 LOOP_DELAY=1
+SIM_SPEED = 5
 MAX_CLICK_DISTANCE=10
 AUV_SHAPE = ((0,0),(10,-0.75*math.pi),(10,0),(10,0.75*math.pi)) # Stored in polar coords
 SELECT_RADIUS = 10
@@ -15,7 +16,7 @@ POI_COLOR = "red"
 POI_RADIUS = 2
 POI_INDICATOR_LENGTH = 0
 DEFAULT_DEPTH = -50
-MAX_TARGET_SPEED = 3 # m/s
+MAX_TARGET_SPEED = 0.5 # m/s
 
 SEAWATER_DENSITY = 1030 # kg/m3
 DRAG_COEFFICIENT = 1.05
@@ -23,10 +24,12 @@ DRAG_COEFFICIENT = 1.05
 # FIXME: arbitrary auv stats, should be pulled from file with precalced values
 # Assumes rectangular prism of uniform mass
 MAX_MOTOR_FORCE = 100 # newtons
-AUV_MASS = 100 # kg
-AUV_WIDTH = 1/2
-AUV_LENGTH = 1
-AUV_HEIGHT = 1/4
+MIN_MOTOR_THROTTLE = -0.1
+MAX_MOTOR_THROTTLE = 1
+AUV_MASS = 250 # kg
+AUV_WIDTH = 1.016 #meters
+AUV_LENGTH = 1.7272 #meters
+AUV_HEIGHT = 1.2954 #meters
 AUV_MOMENT_X = 1/12*AUV_MASS*(AUV_WIDTH*AUV_WIDTH + AUV_HEIGHT*AUV_HEIGHT)
 AUV_MOMENT_Y = 1/12*AUV_MASS*(AUV_LENGTH*AUV_LENGTH + AUV_HEIGHT*AUV_HEIGHT)
 AUV_MOMENT_Z = 1/12*AUV_MASS*(AUV_WIDTH*AUV_WIDTH + AUV_LENGTH*AUV_LENGTH)
@@ -34,9 +37,9 @@ LINEAR_DRAG_CONSTANT_X = -1/2 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH 
 LINEAR_DRAG_CONSTANT_Y = -1/2 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_LENGTH * AUV_HEIGHT
 LINEAR_DRAG_CONSTANT_Z = -1/2 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH * AUV_LENGTH
 # FIXME: Verify drag torques
-ROTATIONAL_DRAG_CONSTANT_X = 1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_LENGTH * (AUV_WIDTH ** 3 + AUV_HEIGHT ** 3)
-ROTATIONAL_DRAG_CONSTANT_Y = 1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH * (AUV_LENGTH ** 3 + AUV_HEIGHT ** 3)
-ROTATIONAL_DRAG_CONSTANT_Z = 1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_HEIGHT * (AUV_WIDTH ** 3 + AUV_LENGTH ** 3)
+ROTATIONAL_DRAG_CONSTANT_X = -1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_LENGTH * (AUV_WIDTH ** 3 + AUV_HEIGHT ** 3)
+ROTATIONAL_DRAG_CONSTANT_Y = -1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH * (AUV_LENGTH ** 3 + AUV_HEIGHT ** 3)
+ROTATIONAL_DRAG_CONSTANT_Z = -1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_HEIGHT * (AUV_WIDTH ** 3 + AUV_LENGTH ** 3)
 
 
 class AUVSim:
@@ -47,8 +50,8 @@ class AUVSim:
         self.selectedAUV = None
         self.setupGUI()
         self.auvs = []
-        self.auvs.append(AUV([200,200], 0, "AUV1", ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
-        self.auvs.append(AUV([100,150], 2*math.pi/3, "AUV2", ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
+        self.auvs.append(AUV([200,200], 0, "Orpheus", ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
+        self.auvs.append(AUV([100,150], 2*math.pi/3, "Eurydice", ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
         self.stepCount = 0
     
     def writeLog(self, message):
@@ -90,7 +93,7 @@ class AUVSim:
     def loop(self):
         newTime = time.time()
         timestep = newTime - self.lastTime
-        self.updateSimulation(timestep)
+        self.updateSimulation(SIM_SPEED*timestep)
         self.redrawMainDisplay()
         self.updateInfoBox2()
         self.stepCount += 1
@@ -190,14 +193,14 @@ class AUV:
         self.updateKinematics(timestep)
     
     def updateAutonomy(self):
-        # Doesn't need a timestep, is instantaneous
         # Uses target position to determine target velocity
-        # FIXME: If AUV reaches target, update to the next point in the list
+        # If AUV reaches target, update to the next point in the list
         if(self.autonomyMode == 0): # No Autonomy
             self.targetOrientation = self.orientation
             self.targetVelocity = np.zeros([3,1])
             return
         if(self.autonomyMode == 1): # p2p
+            # FIXME: Change name of deltaPosition
             deltaPosition = self.targetPosition - self.position
             if(np.mean(np.square(deltaPosition))<4):
                 self.targetIndex = (self.targetIndex + 1) % len(self.targets)
@@ -233,25 +236,26 @@ class AUV:
         else: # Turn Right
             differential = angP*(necessaryRotation-2*math.pi) + angD*angVelocity
         linP = 4
-        linD = -0.5
+        linD = -0.25
         deltaAcceleration = (deltaVelocity - self.controlsDeltaVelocity)/timestep
         linear = linP*deltaVelocity[0,0] + linD*deltaAcceleration[0,0]
         self.motorThrottle = np.array([linear-differential,linear+differential])
-        self.motorThrottle = self.motorThrottle / np.max(np.abs([1,self.motorThrottle[0], self.motorThrottle[1]]))
+        self.motorThrottle = self.motorThrottle / np.max(np.abs([1, self.motorThrottle[0], self.motorThrottle[1]]))
+        self.motorThrottle = np.clip(self.motorThrottle,MIN_MOTOR_THROTTLE,MAX_MOTOR_THROTTLE)
         self.controlsDeltaVelocity = deltaVelocity
     
     def updateDynamics(self, timestep = 1):
-        # https://www.researchgate.net/publication/253652041_UNDERWATER_VEHICLE_DYNAMIC_MODELING
+        # Based on https://www.researchgate.net/publication/253652041_UNDERWATER_VEHICLE_DYNAMIC_MODELING
         # We'll just start with a simple force sim for now
         # Update force and torques based on motor power
         force = np.zeros((3,2))
-        throttle = np.clip(self.motorThrottle, -1, 1)
+        throttle = np.clip(self.motorThrottle, MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE)
         for motorNum in range(len(throttle)):
             force = force + throttle[motorNum] * self.maxMotorForces[motorNum]
         # Need to add drag from water
-        drag = np.array([[LINEAR_DRAG_CONSTANT_X * self.bodyLinearVelocity[0,0], ROTATIONAL_DRAG_CONSTANT_X * self.bodyAngularVelocity[0,0]**2],\
-                         [LINEAR_DRAG_CONSTANT_Y * self.bodyLinearVelocity[1,0], ROTATIONAL_DRAG_CONSTANT_Y * self.bodyAngularVelocity[1,0]**2],\
-                         [LINEAR_DRAG_CONSTANT_Z * self.bodyLinearVelocity[2,0], ROTATIONAL_DRAG_CONSTANT_Z * self.bodyAngularVelocity[2,0]**2]])
+        drag = np.array([[LINEAR_DRAG_CONSTANT_X * self.bodyLinearVelocity[0,0], ROTATIONAL_DRAG_CONSTANT_X * self.bodyAngularVelocity[0,0]*np.abs(self.bodyAngularVelocity[0,0])],\
+                         [LINEAR_DRAG_CONSTANT_Y * self.bodyLinearVelocity[1,0], ROTATIONAL_DRAG_CONSTANT_Y * self.bodyAngularVelocity[1,0]*np.abs(self.bodyAngularVelocity[1,0])],\
+                         [LINEAR_DRAG_CONSTANT_Z * self.bodyLinearVelocity[2,0], ROTATIONAL_DRAG_CONSTANT_Z * self.bodyAngularVelocity[2,0]*np.abs(self.bodyAngularVelocity[2,0])]])
         force = force + drag
         self.bodyLinearVelocity = self.bodyLinearVelocity + force[:,[0]]/AUV_MASS*timestep
         self.bodyAngularVelocity = self.bodyAngularVelocity + force[:,[1]]/AUV_MASS*timestep
