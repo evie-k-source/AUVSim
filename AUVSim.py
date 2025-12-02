@@ -1,11 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
 import time
-from datetime import datetime
 import numpy as np
-import math
-import json
 import os
+import json
+from AUVUtilities import *
+from AUV import AUV
 
 LOOP_DELAY = 1
 SIM_SPEED = 5
@@ -18,9 +18,6 @@ DISPLAY_COLOR = "black"
 POI_COLOR = "red"
 POI_RADIUS = 2
 POI_INDICATOR_LENGTH = 0
-DEFAULT_DEPTH = -50
-MAX_TARGET_SPEED = 0.5 # m/s
-SEAWATER_DENSITY = 1030 # kg/m3
 
 class AUVSim:
     Instance = None
@@ -31,8 +28,8 @@ class AUVSim:
         self.selectedAUV = None
         self.setupGUI()
         self.auvs = []
-        self.auvs.append(AUV([200,200], 0, "Orpheus", self.auvModels["Orpheus"], ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
-        self.auvs.append(AUV([100,150], 2*math.pi/3, "Eurydice", self.auvModels["Orpheus"], ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
+        self.auvs.append(AUV(self.logger, [200,200], 0, "Orpheus", self.auvModels["Orpheus"], ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
+        self.auvs.append(AUV(self.logger, [100,150], 2*math.pi/3, "Eurydice", self.auvModels["Orpheus"], ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
         self.stepCount = 0
     
     def writeLog(self, message):
@@ -49,7 +46,7 @@ class AUVSim:
             messagebox.showwarning("No AUV Directory", "AUV Models are missing")
         self.auvModels = {}
         for filename in AUVFilenames:
-            model = AUV.AUVConstants(f"auvs\\{filename}")
+            model = AUV.AUVConstants(self.logger, f"auvs\\{filename}")
             self.auvModels[model.modelName] = model
     
     def setupGUI(self):
@@ -138,230 +135,8 @@ class AUVSim:
     def updateSimulation(self, timestep = 1):
         for auv in self.auvs:
             auv.updateSimulation(timestep)
-        
-class AUV:
-    def __init__(self, position = [0,0], heading = 0, name = "AUV", constants = None, autonomyInfo = [""]):
-        if(AUVSim.Instance == None):
-            print("ERROR: AUVSim must be instantiated before AUVs")
-            return
-        self.name = name
-        AUVSim.Instance.writeLog(f"new AUV: {self.name}")
-        if constants == None:
-            self.constants = AUVConstants()
-        else:
-            self.constants = constants
-        #self.initializeConstants()
-        self.initializeKinematics(position, heading)
-        self.setAutonomy(autonomyInfo)
-    
-    def setAutonomy(self, autonomyInfo = [""]):
-        if(autonomyInfo[0] == "p2p"):
-            self.autonomyMode = 1
-            self.targets = np.array(autonomyInfo[1])
-            self.targetIndex = 0
-            self.targetPosition = np.transpose([self.targets[0]])
-        elif(autonomyInfo[0] == "follow"):
-            self.targetAUV = autonomyInfo[1]
-            self.targetOffset = autonomyInfo[2]
-            self.autonomyMode = 2
-        else:
-            self.autonomyMode = 0 # No autonomy
-        
-    def initializeConstants(self):
-        self.constants = AUV.AUVConstants()
-        
-        self.constants.mass = AUV_MASS
-        self.constants.momentsOfInertia = np.array([[AUV_MOMENT_X], [AUV_MOMENT_Y], [AUV_MOMENT_Z]])
-        self.constants.dragConstants = np.array([[LINEAR_DRAG_CONSTANT_X, LINEAR_DRAG_CONSTANT_Y, LINEAR_DRAG_CONSTANT_Z],\
-                                       [ROTATIONAL_DRAG_CONSTANT_X, ROTATIONAL_DRAG_CONSTANT_Y, ROTATIONAL_DRAG_CONSTANT_Z]]).T
-        self.constants.maxMotorForces = np.array([[[MAX_MOTOR_FORCE, 0], [0,0], [0, -MAX_MOTOR_FORCE*AUV_WIDTH/2]],\
-                                         [[MAX_MOTOR_FORCE, 0], [0,0], [0, MAX_MOTOR_FORCE*AUV_WIDTH/2]]])
-        self.constants.throttleRanges = np.array([[MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE], [MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE]])
-        
-    def initializeKinematics(self, initPosition, initHeading):
-        AUVSim.Instance.writeLog(f"Initialize {self.name} kinematics")
-        self.position = np.array([[initPosition[0]], [initPosition[1]], [DEFAULT_DEPTH]])
-        self.orientation = np.array([[0], [0], [initHeading]])
-        self.inertialLinearVelocity = np.zeros([3,1])
-        self.inertialAngularVelocity = np.zeros([3,1])
-        self.bodyLinearVelocity = np.zeros([3,1])   # Probably don't need to track
-        self.bodyAngularVelocity = np.zeros([3,1])  # Probably don't need to track
-        self.controlsVelocityError = np.zeros([3,1])
-        self.inertialVelocities = np.transpose(np.concatenate((self.inertialLinearVelocity, self.inertialAngularVelocity), axis=1))
-        self.bodyVelocities = np.transpose(np.concatenate((self.bodyLinearVelocity, self.bodyAngularVelocity), axis=1))
-    
-    def updateSimulation(self, timestep = 1):
-        self.updateAutonomy()
-        self.updateControls()
-        self.updateDynamics(timestep)
-        self.updateKinematics(timestep)
-    
-    def updateAutonomy(self):
-        # Uses target position to determine target velocity
-        # If AUV reaches target, update to the next point in the list
-        if(self.autonomyMode == 0): # No Autonomy
-            self.targetOrientation = self.orientation
-            self.targetVelocity = np.zeros([3,1])
-            return
-        if(self.autonomyMode == 1): # p2p
-            positionError = self.targetPosition - self.position
-            if(np.mean(np.square(positionError))<4):
-                self.targetIndex = (self.targetIndex + 1) % len(self.targets)
-                self.targetPosition = np.transpose([self.targets[self.targetIndex]])
-                positionError = self.targetPosition - self.position
-            self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
-            unitVectorOrientation = eulerAngleToUnitVector(self.orientation)
-            self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
-            return
-        if(self.autonomyMode == 2): # follow
-            self.targetOrientation = self.orientation
-            self.targetVelocity = np.zeros([3,1])
-            return
-        AUVSim.Instance.writeLog("ERROR: Unrecognized Autonomy Mode")
-    
-    def updateControls(self, timestep = 1):
-        # Implementation of PD controller for now
-        # TODO: implement actual motor controller
-        # TODO: PID Controller
-        # Update motor throttles
-        # Uses target velocity of the AUV to determine motor power
-        if(self.autonomyMode == 0):
-            self.motorThrottle = np.zeros(2)
-            return
-        angP = 2
-        angD = -5
-        orientationError = self.targetOrientation - self.orientation
-        velocityError = self.targetVelocity - self.bodyLinearVelocity
-        necessaryRotation = orientationError[2,0] % (2*math.pi)
-        angVelocity = self.bodyAngularVelocity[2,0]
-        if(necessaryRotation < math.pi): # Turn Left
-            differential = angP*necessaryRotation + angD*angVelocity
-        else: # Turn Right
-            differential = angP*(necessaryRotation-2*math.pi) + angD*angVelocity
-        linP = 4
-        linD = -0.25
-        deltaAcceleration = (velocityError - self.controlsVelocityError)/timestep
-        linear = linP*velocityError[0,0] + linD*deltaAcceleration[0,0]
-        self.motorThrottle = np.array([linear-differential,linear+differential])
-        self.motorThrottle = self.motorThrottle / np.max(np.abs([1, self.motorThrottle[0], self.motorThrottle[1]]))
-        self.motorThrottle = np.clip(self.motorThrottle,self.constants.throttleRanges[:,0],self.constants.throttleRanges[:,1])
-        self.controlsVelocityError = velocityError
-    
-    def updateDynamics(self, timestep = 1):
-        # Based on https://www.researchgate.net/publication/253652041_UNDERWATER_VEHICLE_DYNAMIC_MODELING
-        # We'll just start with a simple force sim for now
-        # Update force and torques based on motor power
-        force = np.zeros((3,2))
-        throttle = np.clip(self.motorThrottle,self.constants.throttleRanges[:,0],self.constants.throttleRanges[:,1])
-        for motorNum in range(len(throttle)):
-            force = force + throttle[motorNum] * self.constants.maxMotorForces[motorNum]
-        # Add drag to forces from controls
-        drag = self.constants.dragConstants*np.concat([self.bodyLinearVelocity, self.bodyAngularVelocity*np.abs(self.bodyAngularVelocity)], axis=1)
-        force = force + drag
-        # Update velocity
-        self.bodyLinearVelocity = self.bodyLinearVelocity + force[:,[0]]/self.constants.mass*timestep
-        self.bodyAngularVelocity = self.bodyAngularVelocity + force[:,[1]]/self.constants.momentsOfInertia*timestep
-    
-    def updateKinematics(self, timestep = 1):
-        self.inertialLinearVelocity = np.matmul(linearFrameTransform(self.orientation), self.bodyLinearVelocity)
-        self.inertialAngularVelocity = np.matmul(angularFrameTransform(self.orientation), self.bodyAngularVelocity)
-        self.orientation = self.orientation + timestep * self.inertialAngularVelocity
-        self.orientation[0,0] %= 2*math.pi
-        self.orientation[1,0] %= 2*math.pi
-        self.orientation[2,0] %= 2*math.pi
-        self.position = self.position + timestep * self.inertialLinearVelocity
 
-    class AUVConstants:
-        def __init__(self, filename = ""):
-            if(filename == ""):
-                self.modelName = ""
-                self.mass = 1
-                self.dimensions = np.ones((1,3))
-                self.momentsOfInertia = np.ones((3,1))
-                self.dragConstants = -np.ones((3,2))
-                self.maxMotorForces = np.array([[]])
-                self.throttleRanges = np.array([[]])
-                return
-            
-            AUVSim.Instance.logger.write(f"Loading AUV Model: {filename}")
-            auvFile = open(filename, 'r')
-            data = json.load(auvFile)
-            auvFile.close()
-            
-            self.modelName = data["model"]
-            
-            physics = data["physicsConstants"]
-            self.mass = physics["mass"]
-            self.dimensions = np.array([physics["dimensions"]])
-            self.momentsOfInertia = np.array([physics["momentsOfInertia"]]).T
-            self.dragConstants = np.array([physics["linearDrag"], physics["rotationalDrag"]]).T
 
-            motors = data["controls"]["motors"]
-            motorThrottles = []
-            motorForces = []
-            for motor in motors:
-                motorThrottles.append(motor["throttleRange"])
-                motorForces.append(np.array([motor["maxForce"], motor["maxTorque"]]).T)
-            self.maxMotorForces = np.array(motorForces)
-            self.throttleRanges = np.array(motorThrottles)
-            
-            AUVSim.Instance.logger.write(f"Finished loading {filename}")
-            
-            
-        
-class Logger:
-    def __init__(self, logName):
-        os.makedirs("logs", exist_ok=True)
-        self.logFile = open(f"logs\\{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}.log", 'w')
-        self.logStart = time.time()
-        self.write(f"Start Log: {logName}")
-    
-    def __del__(self):
-        self.stop()
-        
-    def write(self, message):
-        self.logFile.write(f"{time.time()-self.logStart:.3f}: \t{message}\n")
-        
-    def stop(self):
-        self.logFile.close()
-
-def linearFrameTransform(inertialRotation):
-    if(inertialRotation.shape != (3,1)):
-        if(AUVSim.Instance != None):
-            AUVSim.Instance.writeLog(f"ERROR: Cannot perform linear frame transform: inertial rotation has shape: {inertialRotation.shape}")
-        else:
-            print(f"ERROR: Cannot perform linear frame transform: inertial rotation has shape: {inertialRotation.shape}")
-        return
-    phi = inertialRotation[0,0]     # Rotation about x
-    theta = inertialRotation[1,0]   # Rotation about y
-    psi = inertialRotation[2,0]     # Rotation about z
-    return np.array([[np.cos(psi)*np.cos(theta), -np.sin(psi)*np.cos(phi)+np.cos(psi)*np.sin(theta)*np.sin(phi), np.sin(psi)*np.sin(phi)+np.cos(psi)*np.cos(phi)*np.sin(theta)],\
-                     [np.sin(psi)*np.cos(theta), np.cos(psi)*np.cos(phi)+np.sin(phi)*np.sin(theta)*np.sin(psi), -np.cos(psi)*np.sin(phi)+np.sin(theta)*np.sin(psi)*np.cos(phi)],\
-                     [-np.sin(theta), np.cos(theta)*np.sin(phi), np.cos(theta)*np.cos(phi)]])
-
-def angularFrameTransform(inertialRotation):
-    if(inertialRotation.shape != (3,1)):
-        if(AUVSim.Instance != None):
-            AUVSim.Instance.writeLog(f"ERROR: Cannot perform linear frame transform: inertial rotation has shape: {inertialRotation.shape}")
-        else:
-            print(f"ERROR: Cannot perform linear frame transform: inertial rotation has shape: {inertialRotation.shape}")
-        return
-    phi = inertialRotation[0,0]     # Rotation about x
-    theta = inertialRotation[1,0]   # Rotation about y
-    psi = inertialRotation[2,0]     # Rotation about z
-    return np.array([[1, np.sin(phi)*np.tan(theta), np.cos(phi)*np.tan(theta)],\
-                     [0, np.cos(phi), -np.sin(phi)],\
-                     [0, np.sin(phi)/np.cos(theta), np.cos(phi)/np.cos(theta)]])
-
-def eulerAngleToUnitVector(eulerAngles):
-    return np.array([[np.cos(eulerAngles[2,0])*np.cos(eulerAngles[1,0])],\
-                     [np.sin(eulerAngles[2,0])*np.cos(eulerAngles[1,0])],\
-                     [np.sin(eulerAngles[1,0])]])
-    
-# Use only for GUI updates, not simulation
-def polarToCartesian(polarCoords, angleOffset = 0, cartesianOffset = (0,0)):
-    return (polarCoords[0]*math.cos(polarCoords[1] + angleOffset) + cartesianOffset[0],\
-            polarCoords[0]*math.sin(polarCoords[1] + angleOffset) + cartesianOffset[1])
-
-simulator = AUVSim()
-simulator.start()
+if __name__ == "__main__":
+    simulator = AUVSim()
+    simulator.start()
