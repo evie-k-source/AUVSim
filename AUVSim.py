@@ -1,8 +1,11 @@
 import tkinter as tk
+from tkinter import messagebox
 import time
 from datetime import datetime
 import numpy as np
 import math
+import json
+import os
 
 LOOP_DELAY = 1
 SIM_SPEED = 5
@@ -17,41 +20,19 @@ POI_RADIUS = 2
 POI_INDICATOR_LENGTH = 0
 DEFAULT_DEPTH = -50
 MAX_TARGET_SPEED = 0.5 # m/s
-
 SEAWATER_DENSITY = 1030 # kg/m3
-DRAG_COEFFICIENT = 1.05
-
-# FIXME: arbitrary auv stats, should be pulled from file with precalced values
-# Assumes rectangular prism of uniform mass
-MAX_MOTOR_FORCE = 100 # newtons
-MIN_MOTOR_THROTTLE = -0.1
-MAX_MOTOR_THROTTLE = 1
-AUV_MASS = 250 # kg
-AUV_WIDTH = 1.016 #meters
-AUV_LENGTH = 1.7272 #meters
-AUV_HEIGHT = 1.2954 #meters
-AUV_MOMENT_X = 1/12*AUV_MASS*(AUV_WIDTH*AUV_WIDTH + AUV_HEIGHT*AUV_HEIGHT)
-AUV_MOMENT_Y = 1/12*AUV_MASS*(AUV_LENGTH*AUV_LENGTH + AUV_HEIGHT*AUV_HEIGHT)
-AUV_MOMENT_Z = 1/12*AUV_MASS*(AUV_WIDTH*AUV_WIDTH + AUV_LENGTH*AUV_LENGTH)
-LINEAR_DRAG_CONSTANT_X = -1/2 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH * AUV_HEIGHT
-LINEAR_DRAG_CONSTANT_Y = -1/2 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_LENGTH * AUV_HEIGHT
-LINEAR_DRAG_CONSTANT_Z = -1/2 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH * AUV_LENGTH
-# FIXME: Verify drag torques
-ROTATIONAL_DRAG_CONSTANT_X = -1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_LENGTH * (AUV_WIDTH ** 3 + AUV_HEIGHT ** 3)
-ROTATIONAL_DRAG_CONSTANT_Y = -1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_WIDTH * (AUV_LENGTH ** 3 + AUV_HEIGHT ** 3)
-ROTATIONAL_DRAG_CONSTANT_Z = -1/32 * SEAWATER_DENSITY * DRAG_COEFFICIENT * AUV_HEIGHT * (AUV_WIDTH ** 3 + AUV_LENGTH ** 3)
-
 
 class AUVSim:
     Instance = None
     def __init__(self):
         AUVSim.Instance = self
         self.logger = Logger("AUVSimLog")
+        self.loadAUVs()
         self.selectedAUV = None
         self.setupGUI()
         self.auvs = []
-        self.auvs.append(AUV([200,200], 0, "Orpheus", ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
-        self.auvs.append(AUV([100,150], 2*math.pi/3, "Eurydice", ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
+        self.auvs.append(AUV([200,200], 0, "Orpheus", self.auvModels["Orpheus"], ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
+        self.auvs.append(AUV([100,150], 2*math.pi/3, "Eurydice", self.auvModels["Orpheus"], ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
         self.stepCount = 0
     
     def writeLog(self, message):
@@ -59,7 +40,18 @@ class AUVSim:
             print("WARNING: logger has not been initialized")
             return
         self.logger.write(message)
-        
+
+    def loadAUVs(self):
+        try:
+            AUVFilenames = os.listdir("auvs")
+        except(FileNotFoundError):
+            self.writeLog("ERROR: AUV directory not found")
+            messagebox.showwarning("No AUV Directory", "AUV Models are missing")
+        self.auvModels = {}
+        for filename in AUVFilenames:
+            model = AUV.AUVConstants(f"auvs\\{filename}")
+            self.auvModels[model.modelName] = model
+    
     def setupGUI(self):
         # Root Window
         self.rootWindow = tk.Tk()
@@ -104,14 +96,14 @@ class AUVSim:
         if(self.selectedAUV == None):
             self.infoBox1.config(text="")
         else:
-            self.infoBox1.config(text="Name:\nLocation:\nDepth:\nHeading:\nVelocity:\nRotation Velocity:\nTarget Speed:\nTarget Heading:\nMotor 1:\nMotor 2:")
+            self.infoBox1.config(text="Name:\nModel:\nLocation:\nDepth:\nHeading:\nVelocity:\nRotation Velocity:\nTarget Speed:\nTarget Heading:\nMotor 1:\nMotor 2:")
         
     def updateInfoBox2(self):
         auv = self.selectedAUV
         if(auv == None):
             self.infoBox2.config(text="")
         else:
-            self.infoBox2.config(text=f"{auv.name}\n({auv.position[0,0]:.3f}, {auv.position[1,0]:.3f})\n{auv.position[2,0]:.3f}\n{180/math.pi*auv.orientation[2,0]:.3f}\n{auv.bodyLinearVelocity[0,0]:.3f}\n{180/math.pi*auv.bodyAngularVelocity[2,0]:.3f}\n{auv.targetVelocity[0,0]:.3f}\n{180/math.pi*auv.targetOrientation[2,0]:.3f}\n{auv.motorThrottle[0]*100:.1f}%\n{auv.motorThrottle[1]*100:.1f}%")
+            self.infoBox2.config(text=f"{auv.name}\n{auv.constants.modelName}\n({auv.position[0,0]:.3f}, {auv.position[1,0]:.3f})\n{auv.position[2,0]:.3f}\n{180/math.pi*auv.orientation[2,0]:.3f}\n{auv.bodyLinearVelocity[0,0]:.3f}\n{180/math.pi*auv.bodyAngularVelocity[2,0]:.3f}\n{auv.targetVelocity[0,0]:.3f}\n{180/math.pi*auv.targetOrientation[2,0]:.3f}\n{auv.motorThrottle[0]*100:.1f}%\n{auv.motorThrottle[1]*100:.1f}%")
     
     def mainDisplayButton1Handler(self, event):
         minDis = SELECT_RADIUS ** 2
@@ -148,13 +140,17 @@ class AUVSim:
             auv.updateSimulation(timestep)
         
 class AUV:
-    def __init__(self, position = [0,0], heading = 0, name = "AUV", autonomyInfo = [""]):
+    def __init__(self, position = [0,0], heading = 0, name = "AUV", constants = None, autonomyInfo = [""]):
         if(AUVSim.Instance == None):
             print("ERROR: AUVSim must be instantiated before AUVs")
             return
         self.name = name
         AUVSim.Instance.writeLog(f"new AUV: {self.name}")
-        self.initializeConstants()
+        if constants == None:
+            self.constants = AUVConstants()
+        else:
+            self.constants = constants
+        #self.initializeConstants()
         self.initializeKinematics(position, heading)
         self.setAutonomy(autonomyInfo)
     
@@ -276,13 +272,47 @@ class AUV:
         self.position = self.position + timestep * self.inertialLinearVelocity
 
     class AUVConstants:
-        def __init__(self, file = ""):
-            pass
+        def __init__(self, filename = ""):
+            if(filename == ""):
+                self.modelName = ""
+                self.mass = 1
+                self.dimensions = np.ones((1,3))
+                self.momentsOfInertia = np.ones((3,1))
+                self.dragConstants = -np.ones((3,2))
+                self.maxMotorForces = np.array([[]])
+                self.throttleRanges = np.array([[]])
+                return
+            
+            AUVSim.Instance.logger.write(f"Loading AUV Model: {filename}")
+            auvFile = open(filename, 'r')
+            data = json.load(auvFile)
+            auvFile.close()
+            
+            self.modelName = data["model"]
+            
+            physics = data["physicsConstants"]
+            self.mass = physics["mass"]
+            self.dimensions = np.array([physics["dimensions"]])
+            self.momentsOfInertia = np.array([physics["momentsOfInertia"]]).T
+            self.dragConstants = np.array([physics["linearDrag"], physics["rotationalDrag"]]).T
+
+            motors = data["controls"]["motors"]
+            motorThrottles = []
+            motorForces = []
+            for motor in motors:
+                motorThrottles.append(motor["throttleRange"])
+                motorForces.append(np.array([motor["maxForce"], motor["maxTorque"]]).T)
+            self.maxMotorForces = np.array(motorForces)
+            self.throttleRanges = np.array(motorThrottles)
+            
+            AUVSim.Instance.logger.write(f"Finished loading {filename}")
+            
             
         
 class Logger:
     def __init__(self, logName):
-        self.logFile = open(f"{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}", 'w')
+        os.makedirs("logs", exist_ok=True)
+        self.logFile = open(f"logs\\{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}.log", 'w')
         self.logStart = time.time()
         self.write(f"Start Log: {logName}")
     
