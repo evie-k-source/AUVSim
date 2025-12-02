@@ -68,7 +68,7 @@ class AUVSim:
         self.mainDisplay.bind("<Button-2>", self.startMovingMap)
         self.mainDisplay.bind("<ButtonRelease-2>", self.stopMovingMap)
         if sys.platform == "win32":
-            self.mainDisplay.bind("<MouseWheel>", self.zoom)
+            self.mainDisplay.bind("<MouseWheel>", self.zoomWindows)
         else:
             self.mainDisplay.bind("<Button-4>", self.zoomLinux)
             self.mainDisplay.bind("<Button-5>", self.zoomLinux)
@@ -150,18 +150,28 @@ class AUVSim:
         self.mapOffset[1] += (screen_y - self.lastMouse[1])/self.zoomLevel
         self.lastMouse = (screen_x, screen_y)
 
-    def zoom(self, event):
+    def zoom(self, delta):
         #update zoom level
-        newZoomLevel = self.zoomLevel * ZOOM_RATE ** (event.delta/120)
+        newZoomLevel = self.zoomLevel * (ZOOM_RATE ** delta)
         newZoomLevel = max(MIN_ZOOM_LEVEL, min(MAX_ZOOM_LEVEL, newZoomLevel))
         #FIXME: update center of screen so that we're zooming towards the top left
-        print(f"{event.x}, {event.y}")
+        #print(f"{event.x}, {event.y}")
         #self.mapOffset[0] += event.x/self.zoomLevel-
         #self.mapOffset[1] += event.y/self.zoomLevel*(self.zoomLevel-newZoomLevel)
         self.zoomLevel = newZoomLevel
 
+    def zoomWindows(self, event):
+        self.zoom(event.delta/120)
+
     def zoomLinux(self, event):
-        print(f"zoom {event.delta}")
+        if(event.num == 4): #Scroll In
+            self.zoom(1)
+        elif(event.num == 5): #Scroll Out
+            self.zoom(-1)
+        else:
+            self.writeLog(f"Unrecongnized event num in zoomLinux: {event.num}")
+            return
+    
 
     def centerMovingMap(self, event):
         self.mapOffset = [0,0]
