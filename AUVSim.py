@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 LOOP_DELAY = 1
-SIM_SPEED = 1
+SIM_SPEED = 5
 MAX_CLICK_DISTANCE = 10
 AUV_SHAPE = ((0,0),(10,-0.75*math.pi),(10,0),(10,0.75*math.pi)) # Stored in polar coords
 SELECT_RADIUS = 10
@@ -154,6 +154,7 @@ class AUV:
             return
         self.name = name
         AUVSim.Instance.writeLog(f"new AUV: {self.name}")
+        self.initializeConstants()
         self.initializeKinematics(position, heading)
         self.setAutonomy(autonomyInfo)
     
@@ -170,7 +171,17 @@ class AUV:
         else:
             self.autonomyMode = 0 # No autonomy
         
-    
+    def initializeConstants(self):
+        self.constants = AUV.AUVConstants()
+        
+        self.constants.mass = AUV_MASS
+        self.constants.momentsOfInertia = np.array([[AUV_MOMENT_X], [AUV_MOMENT_Y], [AUV_MOMENT_Z]])
+        self.constants.dragConstants = np.array([[LINEAR_DRAG_CONSTANT_X, LINEAR_DRAG_CONSTANT_Y, LINEAR_DRAG_CONSTANT_Z],\
+                                       [ROTATIONAL_DRAG_CONSTANT_X, ROTATIONAL_DRAG_CONSTANT_Y, ROTATIONAL_DRAG_CONSTANT_Z]]).T
+        self.constants.maxMotorForces = np.array([[[MAX_MOTOR_FORCE, 0], [0,0], [0, -MAX_MOTOR_FORCE*AUV_WIDTH/2]],\
+                                         [[MAX_MOTOR_FORCE, 0], [0,0], [0, MAX_MOTOR_FORCE*AUV_WIDTH/2]]])
+        self.constants.throttleRanges = np.array([[MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE], [MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE]])
+        
     def initializeKinematics(self, initPosition, initHeading):
         AUVSim.Instance.writeLog(f"Initialize {self.name} kinematics")
         self.position = np.array([[initPosition[0]], [initPosition[1]], [DEFAULT_DEPTH]])
@@ -179,12 +190,9 @@ class AUV:
         self.inertialAngularVelocity = np.zeros([3,1])
         self.bodyLinearVelocity = np.zeros([3,1])   # Probably don't need to track
         self.bodyAngularVelocity = np.zeros([3,1])  # Probably don't need to track
-        self.controlsDeltaVelocity = np.zeros([3,1])
+        self.controlsVelocityError = np.zeros([3,1])
         self.inertialVelocities = np.transpose(np.concatenate((self.inertialLinearVelocity, self.inertialAngularVelocity), axis=1))
         self.bodyVelocities = np.transpose(np.concatenate((self.bodyLinearVelocity, self.bodyAngularVelocity), axis=1))
-        self.maxMotorForces = np.array(([[MAX_MOTOR_FORCE, 0], [0,0], [0, -MAX_MOTOR_FORCE*AUV_WIDTH/2]],\
-                                         [[MAX_MOTOR_FORCE, 0], [0,0], [0, MAX_MOTOR_FORCE*AUV_WIDTH/2]]))
-        self.mass = 100 # 100 kg
     
     def updateSimulation(self, timestep = 1):
         self.updateAutonomy()
@@ -200,15 +208,14 @@ class AUV:
             self.targetVelocity = np.zeros([3,1])
             return
         if(self.autonomyMode == 1): # p2p
-            # FIXME: Change name of deltaPosition
-            deltaPosition = self.targetPosition - self.position
-            if(np.mean(np.square(deltaPosition))<4):
+            positionError = self.targetPosition - self.position
+            if(np.mean(np.square(positionError))<4):
                 self.targetIndex = (self.targetIndex + 1) % len(self.targets)
                 self.targetPosition = np.transpose([self.targets[self.targetIndex]])
-                deltaPosition = self.targetPosition - self.position
-            self.targetOrientation = np.array([[0],[0],[np.arctan2(deltaPosition[1,0], deltaPosition[0,0])]])
+                positionError = self.targetPosition - self.position
+            self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
             unitVectorOrientation = eulerAngleToUnitVector(self.orientation)
-            self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], deltaPosition[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
+            self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
             return
         if(self.autonomyMode == 2): # follow
             self.targetOrientation = self.orientation
@@ -227,9 +234,9 @@ class AUV:
             return
         angP = 2
         angD = -5
-        deltaOrientation = self.targetOrientation - self.orientation
-        deltaVelocity = self.targetVelocity - self.bodyLinearVelocity
-        necessaryRotation = deltaOrientation[2,0] % (2*math.pi)
+        orientationError = self.targetOrientation - self.orientation
+        velocityError = self.targetVelocity - self.bodyLinearVelocity
+        necessaryRotation = orientationError[2,0] % (2*math.pi)
         angVelocity = self.bodyAngularVelocity[2,0]
         if(necessaryRotation < math.pi): # Turn Left
             differential = angP*necessaryRotation + angD*angVelocity
@@ -237,29 +244,27 @@ class AUV:
             differential = angP*(necessaryRotation-2*math.pi) + angD*angVelocity
         linP = 4
         linD = -0.25
-        deltaAcceleration = (deltaVelocity - self.controlsDeltaVelocity)/timestep
-        linear = linP*deltaVelocity[0,0] + linD*deltaAcceleration[0,0]
+        deltaAcceleration = (velocityError - self.controlsVelocityError)/timestep
+        linear = linP*velocityError[0,0] + linD*deltaAcceleration[0,0]
         self.motorThrottle = np.array([linear-differential,linear+differential])
         self.motorThrottle = self.motorThrottle / np.max(np.abs([1, self.motorThrottle[0], self.motorThrottle[1]]))
-        self.motorThrottle = np.clip(self.motorThrottle,MIN_MOTOR_THROTTLE,MAX_MOTOR_THROTTLE)
-        self.controlsDeltaVelocity = deltaVelocity
+        self.motorThrottle = np.clip(self.motorThrottle,self.constants.throttleRanges[:,0],self.constants.throttleRanges[:,1])
+        self.controlsVelocityError = velocityError
     
     def updateDynamics(self, timestep = 1):
         # Based on https://www.researchgate.net/publication/253652041_UNDERWATER_VEHICLE_DYNAMIC_MODELING
         # We'll just start with a simple force sim for now
         # Update force and torques based on motor power
         force = np.zeros((3,2))
-        throttle = np.clip(self.motorThrottle, MIN_MOTOR_THROTTLE, MAX_MOTOR_THROTTLE)
+        throttle = np.clip(self.motorThrottle,self.constants.throttleRanges[:,0],self.constants.throttleRanges[:,1])
         for motorNum in range(len(throttle)):
-            force = force + throttle[motorNum] * self.maxMotorForces[motorNum]
-        # Need to add drag from water
-        drag = np.array([[LINEAR_DRAG_CONSTANT_X * self.bodyLinearVelocity[0,0], ROTATIONAL_DRAG_CONSTANT_X * self.bodyAngularVelocity[0,0]*np.abs(self.bodyAngularVelocity[0,0])],\
-                         [LINEAR_DRAG_CONSTANT_Y * self.bodyLinearVelocity[1,0], ROTATIONAL_DRAG_CONSTANT_Y * self.bodyAngularVelocity[1,0]*np.abs(self.bodyAngularVelocity[1,0])],\
-                         [LINEAR_DRAG_CONSTANT_Z * self.bodyLinearVelocity[2,0], ROTATIONAL_DRAG_CONSTANT_Z * self.bodyAngularVelocity[2,0]*np.abs(self.bodyAngularVelocity[2,0])]])
+            force = force + throttle[motorNum] * self.constants.maxMotorForces[motorNum]
+        # Add drag to forces from controls
+        drag = self.constants.dragConstants*np.concat([self.bodyLinearVelocity, self.bodyAngularVelocity*np.abs(self.bodyAngularVelocity)], axis=1)
         force = force + drag
-        self.bodyLinearVelocity = self.bodyLinearVelocity + force[:,[0]]/AUV_MASS*timestep
-	# FIXME: Should be moment of inertia instead of mass
-        self.bodyAngularVelocity = self.bodyAngularVelocity + force[:,[1]]/AUV_MASS*timestep
+        # Update velocity
+        self.bodyLinearVelocity = self.bodyLinearVelocity + force[:,[0]]/self.constants.mass*timestep
+        self.bodyAngularVelocity = self.bodyAngularVelocity + force[:,[1]]/self.constants.momentsOfInertia*timestep
     
     def updateKinematics(self, timestep = 1):
         self.inertialLinearVelocity = np.matmul(linearFrameTransform(self.orientation), self.bodyLinearVelocity)
@@ -270,6 +275,11 @@ class AUV:
         self.orientation[2,0] %= 2*math.pi
         self.position = self.position + timestep * self.inertialLinearVelocity
 
+    class AUVConstants:
+        def __init__(self, file = ""):
+            pass
+            
+        
 class Logger:
     def __init__(self, logName):
         self.logFile = open(f"{logName}_{datetime.now().strftime("%Y%m%dT%H%M%S")}", 'w')
