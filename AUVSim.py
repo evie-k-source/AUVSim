@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import filedialog
 import time
 import numpy as np
 import os
@@ -37,9 +38,11 @@ class AUVSim:
         self.logger = Logger("AUVSimLog")
         self.loadSettings()
         self.loadAUVs()
-        self.loadScenario(self.settings["defaultScenario"])
         self.setupGUI()
+        self.loadScenarioFromName(self.settings["scenarios"]["default"])
         self.stepCount = 0
+        self.updateInfoBox1()
+        self.updateInfoBox2()
     
     def writeLog(self, message):
         if(self.logger == None):
@@ -64,22 +67,26 @@ class AUVSim:
             messagebox.showwarning("No AUV Directory", "AUV Models are missing")
         self.auvModels = {}
         for filename in AUVFilenames:
+            self.writeLog(f"Load AUV Model: {filename}")
             if sys.platform == "win32":
                 model = AUV.AUVConstants(self.logger, f"auvs\\{filename}")
             else:
                 model = AUV.AUVConstants(self.logger, f"auvs/{filename}")
             self.auvModels[model.modelName] = model
 
-    def loadScenario(self, scenarioName):
+    def loadScenarioFromName(self, scenarioName):
         if sys.platform == "win32":
             filename = f"scenarios\\{scenarioName}.json"
         else:
             filename = f"scenarios/{scenarioName}.json"
-        if(not os.path.isfile(filename)):
-            self.writeLog(f"{filename} not found")
-            return
+        self.loadScenarioFromPath(filename)
 
-        scenarioFile = open(filename)
+    def loadScenarioFromPath(self, scenarioPath):
+        self.writeLog(f"Load scenario: {scenarioPath}")
+        if(not os.path.isfile(scenarioPath)):
+            self.writeLog(f"{scenarioPath} not found")
+            return
+        scenarioFile = open(scenarioPath)
         scenarioInfo = json.load(scenarioFile)
         scenarioFile.close()
         
@@ -89,7 +96,7 @@ class AUVSim:
             self.auvs.append(AUV(self.logger, auv["location"], auv["orientation"], auv["name"],\
                                  self.auvModels[auv["model"]], auv["autonomy"]))
         self.selectedAUV = None
-            
+        self.updateInfoBox1()
     
     def setupGUI(self):
         # Root Window
@@ -119,16 +126,20 @@ class AUVSim:
         self.infoBox1.grid(row = 1, column = 0, sticky = "nsew")
         self.infoBox2 = tk.Label(self.infoFrame)
         self.infoBox2.grid(row = 1, column = 1, sticky = "nsew")
-        self.updateInfoBox1()
         
         # Menubar
         self.menubar = tk.Menu(self.rootWindow)
         self.rootWindow.config(menu=self.menubar)
-        fileMenu = tk.Menu(self.menubar)
+        fileMenu = tk.Menu(self.menubar,tearoff=0)
+        fileMenu.add_command(label="Open Scenario", command = lambda: self.loadScenarioFromPath(filedialog.askopenfilename(initialdir="scenarios")))
+        recentScenarioMenu = tk.Menu(fileMenu,tearoff=0)
+        for scenario in self.settings["scenarios"]["recent"]:
+            recentScenarioMenu.add_command(label=scenario,command = lambda: self.loadScenarioFromName(self.settings["scenarios"]["recent"][scenario]))
+        fileMenu.add_cascade(label="Recent Scenarios",menu=recentScenarioMenu)
         self.menubar.add_cascade(label="File",menu=fileMenu)
-        viewMenu = tk.Menu(self.menubar)
+        viewMenu = tk.Menu(self.menubar,tearoff=0)
         self.showDebugInfo = False
-        viewMenu.add_checkbutton(label="Toggle Debug Info", command = self.toggleDebugInfo)
+        viewMenu.add_checkbutton(label="Toggle Debug Info",command = self.toggleDebugInfo)
         self.menubar.add_cascade(label="View",menu=viewMenu)
 
         # Set minimum and initial window size

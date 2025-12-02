@@ -1,3 +1,9 @@
 {
-	"defaultScenario": "2Vehicle_P2P"
+	"scenarios":{
+		"default": "2VehicleP2P",
+		"recent":{
+			"2 Vehicle P2P": "2VehicleP2P",
+			"Follow Test": "FollowTest"
+		}
+	}
 }
