@@ -3,6 +3,7 @@ from tkinter import messagebox
 import time
 import numpy as np
 import os
+import sys
 import json
 from AUVUtilities import *
 from AUV import AUV
@@ -18,6 +19,7 @@ DISPLAY_COLOR = "black"
 POI_COLOR = "red"
 POI_RADIUS = 2
 POI_INDICATOR_LENGTH = 0
+
 
 class AUVSim:
     Instance = None
@@ -46,7 +48,10 @@ class AUVSim:
             messagebox.showwarning("No AUV Directory", "AUV Models are missing")
         self.auvModels = {}
         for filename in AUVFilenames:
-            model = AUV.AUVConstants(self.logger, f"auvs\\{filename}")
+            if sys.platform == "win32":
+                model = AUV.AUVConstants(self.logger, f"auvs\\{filename}")
+            else:
+                model = AUV.AUVConstants(self.logger, f"auvs/{filename}")
             self.auvModels[model.modelName] = model
     
     def setupGUI(self):
@@ -59,6 +64,7 @@ class AUVSim:
         self.mainDisplay.bind("<Button-1>", self.mainDisplayButton1Handler)
         self.mainDisplay.bind("<Button-2>", self.startMovingMap)
         self.mainDisplay.bind("<ButtonRelease-2>", self.stopMovingMap)
+        self.mainDisplay.bind("<Control-c>", self.centerMovingMap)
         self.isMovingMap = False
         self.mapOffset = [0,0]
         
@@ -134,6 +140,9 @@ class AUVSim:
         self.mapOffset[0] += (screen_x - self.lastMouse[0])
         self.mapOffset[1] += (screen_y - self.lastMouse[1])
         self.lastMouse = (screen_x, screen_y)
+
+    def centerMovingMap(self, event):
+        self.mapOffset = (0,0)
     
     def redrawMainDisplay(self):
         self.mainDisplay.delete("auv")

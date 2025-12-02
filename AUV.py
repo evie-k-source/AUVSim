@@ -127,7 +127,7 @@ class AUV:
         for motorNum in range(len(throttle)):
             force = force + throttle[motorNum] * self.constants.maxMotorForces[motorNum]
         # Add drag to forces from controls
-        drag = self.constants.dragConstants*np.concat([self.bodyLinearVelocity, self.bodyAngularVelocity*np.abs(self.bodyAngularVelocity)], axis=1)
+        drag = self.constants.dragConstants*np.concatenate([self.bodyLinearVelocity, self.bodyAngularVelocity*np.abs(self.bodyAngularVelocity)], axis=1)
         force = force + drag
         # Update velocity
         self.bodyLinearVelocity = self.bodyLinearVelocity + force[:,[0]]/self.constants.mass*timestep
