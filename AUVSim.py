@@ -35,12 +35,10 @@ class AUVSim:
     def __init__(self):
         AUVSim.Instance = self
         self.logger = Logger("AUVSimLog")
+        self.loadSettings()
         self.loadAUVs()
-        self.selectedAUV = None
+        self.loadScenario(self.settings["defaultScenario"])
         self.setupGUI()
-        self.auvs = []
-        self.auvs.append(AUV(self.logger, [200,200], 0, "Orpheus", self.auvModels["Orpheus"], ["p2p", [[100, 100, -50], [100, 300, -50], [300, 300, -50], [300, 100, -50]]]))
-        self.auvs.append(AUV(self.logger, [100,150], 2*math.pi/3, "Eurydice", self.auvModels["Orpheus"], ["p2p", [[200, 150, -50], [150, 236.6, -50], [250, 236.6, -50]]]))
         self.stepCount = 0
     
     def writeLog(self, message):
@@ -48,6 +46,15 @@ class AUVSim:
             print("WARNING: logger has not been initialized")
             return
         self.logger.write(message)
+
+    def loadSettings(self):
+        # Check if the settings file exists
+        if(not os.path.isfile("AUVSimConfig.json")):
+            self.writeLog("AUVSimConfig.json not found")
+            return
+        settingFile = open("AUVSimConfig.json")
+        self.settings = json.load(settingFile)
+        settingFile.close()
 
     def loadAUVs(self):
         try:
@@ -62,6 +69,27 @@ class AUVSim:
             else:
                 model = AUV.AUVConstants(self.logger, f"auvs/{filename}")
             self.auvModels[model.modelName] = model
+
+    def loadScenario(self, scenarioName):
+        if sys.platform == "win32":
+            filename = f"scenarios\\{scenarioName}.json"
+        else:
+            filename = f"scenarios/{scenarioName}.json"
+        if(not os.path.isfile(filename)):
+            self.writeLog(f"{filename} not found")
+            return
+
+        scenarioFile = open(filename)
+        scenarioInfo = json.load(scenarioFile)
+        scenarioFile.close()
+        
+        self.scenarioName = scenarioInfo["name"]
+        self.auvs = []
+        for auv in scenarioInfo["auvs"]:
+            self.auvs.append(AUV(self.logger, auv["location"], auv["orientation"], auv["name"],\
+                                 self.auvModels[auv["model"]], auv["autonomy"]))
+        self.selectedAUV = None
+            
     
     def setupGUI(self):
         # Root Window

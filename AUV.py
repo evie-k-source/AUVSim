@@ -2,12 +2,11 @@ import numpy as np
 import json
 from AUVUtilities import *
 
-DEFAULT_DEPTH = -50
 MAX_TARGET_SPEED = 0.5 # m/s
 SEAWATER_DENSITY = 1030 # kg/m3
 
 class AUV:
-    def __init__(self, logger, position = [0,0], heading = 0, name = "AUV", constants = None, autonomyInfo = [""]):
+    def __init__(self, logger, position = [0,0,-50], heading = 0, name = "AUV", constants = None, autonomyInfo = [""]):
         self.logger = logger
         self.name = name
         self.writeLog(f"new AUV: {self.name}")
@@ -24,23 +23,23 @@ class AUV:
             return
         self.logger.write(message)
     
-    def setAutonomy(self, autonomyInfo = [""]):
-        if(autonomyInfo[0] == "p2p"):
+    def setAutonomy(self, autonomyInfo = {"type": ""}):
+        if(autonomyInfo["type"] == "p2p"):
             self.autonomyMode = 1
-            self.targets = np.array(autonomyInfo[1])
+            self.targets = np.array(autonomyInfo["targets"])
             self.targetIndex = 0
             self.targetPosition = np.transpose([self.targets[0]])
-        elif(autonomyInfo[0] == "follow"):
-            self.targetAUV = autonomyInfo[1]
-            self.targetOffset = autonomyInfo[2]
+        elif(autonomyInfo["type"] == "follow"):
+            self.targetAUV = autonomyInfo["target"]
+            self.targetOffset = autonomyInfo["offset"]
             self.autonomyMode = 2
         else:
             self.autonomyMode = 0 # No autonomy
         
-    def initializeKinematics(self, initPosition, initHeading):
+    def initializeKinematics(self, initPosition, initOrientation):
         self.writeLog(f"Initialize {self.name} kinematics")
-        self.position = np.array([[initPosition[0]], [initPosition[1]], [DEFAULT_DEPTH]])
-        self.orientation = np.array([[0], [0], [initHeading]])
+        self.position = np.transpose([initPosition])
+        self.orientation = np.transpose([initOrientation])
         self.inertialLinearVelocity = np.zeros([3,1])
         self.inertialAngularVelocity = np.zeros([3,1])
         self.bodyLinearVelocity = np.zeros([3,1])   # Probably don't need to track
