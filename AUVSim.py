@@ -57,6 +57,10 @@ class AUVSim:
         self.mainDisplay = tk.Canvas(self.rootWindow, width = 400, height = 400, bg=DISPLAY_COLOR)
         self.mainDisplay.grid(row = 0,column = 0)
         self.mainDisplay.bind("<Button-1>", self.mainDisplayButton1Handler)
+        self.mainDisplay.bind("<Button-2>", self.startMovingMap)
+        self.mainDisplay.bind("<ButtonRelease-2>", self.stopMovingMap)
+        self.isMovingMap = False
+        self.mapOffset = [0,0]
         
         # Info Box
         self.infoFrame = tk.Frame(self.rootWindow)
@@ -83,6 +87,8 @@ class AUVSim:
         newTime = time.time()
         timestep = newTime - self.lastTime
         self.updateSimulation(SIM_SPEED*timestep)
+        if(self.isMovingMap):
+            self.updateMovingMap()
         self.redrawMainDisplay()
         self.updateInfoBox2()
         self.stepCount += 1
@@ -106,7 +112,8 @@ class AUVSim:
         minDis = SELECT_RADIUS ** 2
         closestAUV = None
         for auv in self.auvs:
-            auvDis = (event.x - auv.position[0,0]) ** 2 + (event.y - auv.position[1,0]) ** 2
+            auvPosition = (auv.position[0,0] + self.mapOffset[0], auv.position[1,0] + self.mapOffset[1])
+            auvDis = (event.x - auvPosition[0]) ** 2 + (event.y - auvPosition[1]) ** 2
             if(auvDis < minDis):
                 minDis = auvDis
                 closestAUV = auv
@@ -114,17 +121,32 @@ class AUVSim:
         self.updateInfoBox1()
         self.updateInfoBox2()
     
+    def startMovingMap(self, event):
+        self.isMovingMap = True
+        screen_x, screen_y = self.rootWindow.winfo_pointerxy()
+        self.lastMouse = (screen_x, screen_y)
+
+    def stopMovingMap(self, event):
+        self.isMovingMap = False
+
+    def updateMovingMap(self):
+        screen_x, screen_y = self.rootWindow.winfo_pointerxy()
+        self.mapOffset[0] += (screen_x - self.lastMouse[0])
+        self.mapOffset[1] += (screen_y - self.lastMouse[1])
+        self.lastMouse = (screen_x, screen_y)
+    
     def redrawMainDisplay(self):
         self.mainDisplay.delete("auv")
         for auv in self.auvs:
             color = AUV_COLOR
-            auvPosition = (auv.position[0,0], auv.position[1,0])
+            auvPosition = (auv.position[0,0] + self.mapOffset[0], auv.position[1,0] + self.mapOffset[1])
             if self.selectedAUV != None and auv.name == self.selectedAUV.name:
                 color = AUV_SELECT_COLOR
                 if(auv.autonomyMode == 1):
-                    self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
-                    self.mainDisplay.create_oval(self.selectedAUV.targetPosition[0,0] - POI_RADIUS, self.selectedAUV.targetPosition[1,0] - POI_RADIUS,\
-                                                 self.selectedAUV.targetPosition[0,0] + POI_RADIUS, self.selectedAUV.targetPosition[1,0] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
+                    targetPosition = (self.selectedAUV.targetPosition[0,0] + self.mapOffset[0], self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])
+                    #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
+                    self.mainDisplay.create_oval(targetPosition[0] - POI_RADIUS, targetPosition[1] - POI_RADIUS,\
+                                                 targetPosition[0] + POI_RADIUS, targetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
             self.mainDisplay.create_polygon(\
                     polarToCartesian(AUV_SHAPE[0], auv.orientation[2,0], auvPosition) + \
                     polarToCartesian(AUV_SHAPE[1], auv.orientation[2,0], auvPosition) + \
