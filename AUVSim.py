@@ -91,10 +91,10 @@ class AUVSim:
         scenarioFile.close()
         
         self.scenarioName = scenarioInfo["name"]
-        self.auvs = []
+        self.auvs = {}
         for auv in scenarioInfo["auvs"]:
-            self.auvs.append(AUV(self.logger, auv["location"], auv["orientation"], auv["name"],\
-                                 self.auvModels[auv["model"]], auv["autonomy"]))
+            self.auvs[auv["name"]] = AUV(self.logger, auv["location"], auv["orientation"], auv["name"],\
+                                 self.auvModels[auv["model"]], auv["autonomy"])
         self.selectedAUV = None
         self.updateInfoBox1()
     
@@ -148,7 +148,6 @@ class AUVSim:
         self.rootWindow.geometry(f"{INIT_WINDOW_DIM[0]}x{INIT_WINDOW_DIM[1]}")
         
         # Callback for resizing the window
-        self.rootWindow.update()
         self.rootWindow.bind("<Configure>", self.resizeWindow)
     
     def start(self):
@@ -190,7 +189,7 @@ class AUVSim:
     def mainDisplayButton1Handler(self, event):
         minDis = SELECT_RADIUS ** 2
         closestAUV = None
-        for auv in self.auvs:
+        for name, auv in self.auvs.items():
             auvPosition = ((auv.position[0,0] + self.mapOffset[0])*self.zoomLevel, (auv.position[1,0] + self.mapOffset[1])*self.zoomLevel)
             auvDis = (event.x - auvPosition[0]) ** 2 + (event.y - auvPosition[1]) ** 2
             if(auvDis < minDis):
@@ -248,12 +247,12 @@ class AUVSim:
     
     def redrawMainDisplay(self):
         self.mainDisplay.delete("auv")
-        for auv in self.auvs:
+        for name, auv in self.auvs.items():
             color = AUV_COLOR
             auvPosition = (auv.position[0,0] + self.mapOffset[0], auv.position[1,0] + self.mapOffset[1])
             if self.selectedAUV != None and auv.name == self.selectedAUV.name:
                 color = AUV_SELECT_COLOR
-                if(auv.autonomyMode == 1):
+                if(auv.autonomyMode == 1 or auv.autonomyMode == 2):
                     scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
                     #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
                     self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
@@ -273,9 +272,10 @@ class AUVSim:
             self.mainDisplay.create_text(5,5,text=f"{self.lastTime - self.startTime:.2f}",fill="white",tag="info",anchor="nw")
     
     def updateSimulation(self, timestep = 1):
-        for auv in self.auvs:
-            auv.updateSensors(timestep)
-        for auv in self.auvs:
+        for name, auv in self.auvs.items():
+            auv.updateSensors(timestep, self.auvs)
+        
+        for name, auv in self.auvs.items():
             auv.updateSimulation(timestep)
 
 

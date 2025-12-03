@@ -30,7 +30,7 @@ class AUV:
             self.targetIndex = 0
             self.targetPosition = np.transpose([self.targets[0]])
         elif(autonomyInfo["type"] == "follow"):
-            self.targetAUV = autonomyInfo["target"]
+            self.targetAUVName = autonomyInfo["target"]
             self.targetOffset = autonomyInfo["offset"]
             self.autonomyMode = 2
         else:
@@ -54,8 +54,9 @@ class AUV:
         self.updateDynamics(timestep)
         self.updateKinematics(timestep)
     
-    def updateSensors(self, timestep = 1):
+    def updateSensors(self, timestep = 1, auvDict = {}):
         # FIXME: Assumes perfect sensors for the following
+        self.sensorAUVs = dict((name, auv) for name, auv in auvDict.items() if name != self.name)
         self.sensorOrientation = np.copy(self.orientation)
         self.sensorLinearVelocity = np.copy(self.bodyLinearVelocity)
         self.sensorAngularVelocity = np.copy(self.bodyAngularVelocity)
@@ -79,8 +80,16 @@ class AUV:
             self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
             return
         if(self.autonomyMode == 2): # follow
-            self.targetOrientation = self.sensorOrientation
-            self.targetVelocity = np.zeros([3,1])
+            if self.targetAUVName in self.sensorAUVs:
+                # FIXME: Target offset needs to rotate with the target AUV
+                self.targetPosition = self.sensorAUVs[self.targetAUVName].sensorPosition + self.targetOffset
+                positionError = self.targetPosition - self.sensorPosition
+                self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
+                unitVectorOrientation = eulerAngleToUnitVector(self.sensorOrientation)
+                self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
+            else:
+                self.targetOrientation = self.sensorOrientation
+                self.targetVelocity = np.zeros([3,1])
             return
         self.writeLog("ERROR: Unrecognized Autonomy Mode")
     
