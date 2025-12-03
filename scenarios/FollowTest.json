@@ -32,7 +32,7 @@
 			"autonomy": {
 				"type": "follow",
 				"target": "Orpheus",
-				"offset": [10, 0, 0]
+				"offset": [-10, 10, 0]
 			}
 		}
 	]

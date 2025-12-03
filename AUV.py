@@ -31,7 +31,7 @@ class AUV:
             self.targetPosition = np.transpose([self.targets[0]])
         elif(autonomyInfo["type"] == "follow"):
             self.targetAUVName = autonomyInfo["target"]
-            self.targetOffset = autonomyInfo["offset"]
+            self.targetOffset = np.transpose([autonomyInfo["offset"]])
             self.autonomyMode = 2
         else:
             self.autonomyMode = 0 # No autonomy
@@ -81,8 +81,8 @@ class AUV:
             return
         if(self.autonomyMode == 2): # follow
             if self.targetAUVName in self.sensorAUVs:
-                # FIXME: Target offset needs to rotate with the target AUV
-                self.targetPosition = self.sensorAUVs[self.targetAUVName].sensorPosition + self.targetOffset
+                targetAUV = self.sensorAUVs[self.targetAUVName]
+                self.targetPosition = targetAUV.sensorPosition + np.matmul(linearFrameTransform(targetAUV.sensorOrientation), self.targetOffset)
                 positionError = self.targetPosition - self.sensorPosition
                 self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
                 unitVectorOrientation = eulerAngleToUnitVector(self.sensorOrientation)
