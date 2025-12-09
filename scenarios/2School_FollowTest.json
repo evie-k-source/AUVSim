@@ -1,0 +1,40 @@
+{
+	"name":"2 School Follow Test",
+	"auvs":[
+		{
+			"location":[
+				110, 110, -50
+			],
+			"orientation":[
+				0, 0, 0
+			],
+			"name": "Lead1",
+			"model": "Orpheus",
+			"autonomy": {
+				"type": "lawnmower",
+				"start": [100,100],
+				"depth": -50,
+				"orientation": 150,
+				"pathSpan": 30,
+				"pathLength": 100,
+				"totalScanWidth": 300,
+				"leftTurn": false
+			}
+		},
+		{
+			"location":[
+				100, 150, -50
+			],
+			"orientation":[
+				0, 0, 2.0944
+			],
+			"name": "Follow1a",
+			"model": "Orpheus",
+			"autonomy": {
+				"type": "follow",
+				"target": "Lead1",
+				"offset": [-10, 10, 0]
+			}
+		}
+	]
+}

@@ -3,7 +3,8 @@
 		"default": "2VehicleP2P",
 		"recent":{
 			"2 Vehicle P2P": "2VehicleP2P",
-			"Follow Test": "FollowTest"
+			"Follow Test": "FollowTest",
+			"2 School Follow Test": "2School_FollowTest"
 		}
 	}
 }

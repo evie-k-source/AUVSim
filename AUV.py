@@ -29,12 +29,33 @@ class AUV:
             self.targets = np.array(autonomyInfo["targets"])
             self.targetIndex = 0
             self.targetPosition = np.transpose([self.targets[0]])
+        elif(autonomyInfo["type"] == "lawnmower"):
+            self.autonomyMode = 1
+            targets = []
+            widthSum = 0
+            pathOrientation = autonomyInfo["orientation"]
+            if autonomyInfo["leftTurn"]:
+                pathShift = [autonomyInfo["pathSpan"]*np.cos(pathOrientation - np.pi/2), autonomyInfo["pathSpan"]*np.sin(pathOrientation - np.pi/2)]
+            else:
+                pathShift = [autonomyInfo["pathSpan"]*np.cos(pathOrientation + np.pi/2), autonomyInfo["pathSpan"]*np.sin(pathOrientation + np.pi/2)]
+            lineStart = autonomyInfo["start"]
+            while widthSum < autonomyInfo["totalScanWidth"]:
+                targets.append([lineStart[0], lineStart[1], autonomyInfo["depth"]])
+                targets.append([lineStart[0] + autonomyInfo["pathLength"] * np.cos(pathOrientation), lineStart[1] + autonomyInfo["pathLength"] * np.sin(pathOrientation), autonomyInfo["depth"]])
+                lineStart = [targets[-1][0] + pathShift[0], targets[-1][1] + pathShift[1]]
+                pathOrientation = np.pi/2 - pathOrientation
+                widthSum += autonomyInfo["pathSpan"]
+            self.targets = np.array(targets)
+            self.targetIndex = 0
+            self.targetPosition = np.transpose([self.targets[0]])
         elif(autonomyInfo["type"] == "follow"):
             self.targetAUVName = autonomyInfo["target"]
             self.targetOffset = np.transpose([autonomyInfo["offset"]])
+            self.targets = np.array([])
             self.autonomyMode = 2
         else:
             self.autonomyMode = 0 # No autonomy
+            self.targets = np.array([])
         
     def initializeKinematics(self, initPosition, initOrientation):
         self.writeLog(f"Initialize {self.name} kinematics")
@@ -42,8 +63,8 @@ class AUV:
         self.orientation = np.transpose([initOrientation])
         self.inertialLinearVelocity = np.zeros([3,1])
         self.inertialAngularVelocity = np.zeros([3,1])
-        self.bodyLinearVelocity = np.zeros([3,1])   # Probably don't need to track
-        self.bodyAngularVelocity = np.zeros([3,1])  # Probably don't need to track
+        self.bodyLinearVelocity = np.zeros([3,1])
+        self.bodyAngularVelocity = np.zeros([3,1])
         self.controlsVelocityError = np.zeros([3,1])
         self.inertialVelocities = np.transpose(np.concatenate((self.inertialLinearVelocity, self.inertialAngularVelocity), axis=1))
         self.bodyVelocities = np.transpose(np.concatenate((self.bodyLinearVelocity, self.bodyAngularVelocity), axis=1))
@@ -94,9 +115,8 @@ class AUV:
         self.writeLog("ERROR: Unrecognized Autonomy Mode")
     
     def updateControls(self, timestep = 1):
-        # Implementation of PD controller for now
+        # Implementation of PD controller
         # TODO: implement actual motor controller
-        # TODO: PID Controller
         # Update motor throttles
         # Uses target velocity of the AUV to determine motor power
         if(self.autonomyMode == 0):
@@ -123,7 +143,6 @@ class AUV:
     
     def updateDynamics(self, timestep = 1):
         # Based on https://www.researchgate.net/publication/253652041_UNDERWATER_VEHICLE_DYNAMIC_MODELING
-        # We'll just start with a simple force sim for now
         # Update force and torques based on motor power
         force = np.zeros((3,2))
         throttle = np.clip(self.motorThrottle,self.constants.throttleRanges[:,0],self.constants.throttleRanges[:,1])

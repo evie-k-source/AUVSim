@@ -24,6 +24,7 @@ AUV_COLOR = "white"
 AUV_SELECT_COLOR = "yellow"
 DISPLAY_COLOR = "black"
 POI_COLOR = "red"
+PATH_COLOR = "gray"
 POI_RADIUS = 2
 POI_INDICATOR_LENGTH = 0
 MAX_ZOOM_LEVEL = 2
@@ -97,6 +98,7 @@ class AUVSim:
                                  self.auvModels[auv["model"]], auv["autonomy"])
         self.selectedAUV = None
         self.updateInfoBox1()
+        self.updateAUVPath()
     
     def setupGUI(self):
         # Root Window
@@ -173,6 +175,27 @@ class AUVSim:
     def toggleDebugInfo(self):
         self.showDebugInfo = not self.showDebugInfo
     
+    def updateFixedDisplayElements(self):
+        self.updateAUVPath()
+    
+    def updateAUVPath(self):
+        self.mainDisplay.delete("auvPath")
+        if self.selectedAUV == None:
+            return
+        if len(self.selectedAUV.targets) == 0:
+            return
+        for targetIndex in range(len(self.selectedAUV.targets) - 1):
+            scaledLineStart = ((self.selectedAUV.targets[targetIndex,0]   + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targets[targetIndex,1]   + self.mapOffset[1])*self.zoomLevel)
+            scaledLineEnd = ((self.selectedAUV.targets[targetIndex+1,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targets[targetIndex+1,1] + self.mapOffset[1])*self.zoomLevel)
+            self.mainDisplay.create_oval(scaledLineStart[0] - POI_RADIUS, scaledLineStart[1] - POI_RADIUS,\
+                                         scaledLineStart[0] + POI_RADIUS, scaledLineStart[1] + POI_RADIUS, fill = PATH_COLOR, tag = "auvPath")
+            self.mainDisplay.create_line(*scaledLineStart, *scaledLineEnd, dash = (3,3), fill = PATH_COLOR, tag = "auvPath")
+        
+        scaledLineStart = ((self.selectedAUV.targets[-1,0]   + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targets[-1,1]   + self.mapOffset[1])*self.zoomLevel)
+        self.mainDisplay.create_oval(scaledLineStart[0] - POI_RADIUS, scaledLineStart[1] - POI_RADIUS,\
+                                     scaledLineStart[0] + POI_RADIUS, scaledLineStart[1] + POI_RADIUS, fill = PATH_COLOR, tag = "auvPath")
+            
+        
     def updateInfoBox1(self):
         if(self.selectedAUV == None):
             self.infoBox1.config(text="")
@@ -196,6 +219,7 @@ class AUVSim:
                 minDis = auvDis
                 closestAUV = auv
         self.selectedAUV = closestAUV
+        self.updateAUVPath()
         self.updateInfoBox1()
         self.updateInfoBox2()
     
@@ -212,6 +236,7 @@ class AUVSim:
         self.mapOffset[0] += (screen_x - self.lastMouse[0])/self.zoomLevel
         self.mapOffset[1] += (screen_y - self.lastMouse[1])/self.zoomLevel
         self.lastMouse = (screen_x, screen_y)
+        self.updateFixedDisplayElements()
 
     def zoom(self, scrollDelta, mousePos = (0,0)):
         #update zoom level
@@ -222,6 +247,7 @@ class AUVSim:
         self.mapOffset[0] += mousePos[0]*deltaInvZoom
         self.mapOffset[1] += mousePos[1]*deltaInvZoom
         self.zoomLevel = newZoomLevel
+        self.updateFixedDisplayElements()
 
     def zoomWindows(self, event):
         self.zoom(event.delta/120, (event.x, event.y))
@@ -244,6 +270,7 @@ class AUVSim:
     def centerMovingMap(self, event):
         self.mapOffset = [0,0]
         self.zoomLevel = np.float64(1.0)
+        self.updateFixedDisplayElements()
     
     def redrawMainDisplay(self):
         self.mainDisplay.delete("auv")
@@ -252,11 +279,18 @@ class AUVSim:
             auvPosition = (auv.position[0,0] + self.mapOffset[0], auv.position[1,0] + self.mapOffset[1])
             if self.selectedAUV != None and auv.name == self.selectedAUV.name:
                 color = AUV_SELECT_COLOR
-                if(auv.autonomyMode == 1 or auv.autonomyMode == 2):
-                    scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
-                    #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
-                    self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
-                                                 scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
+                match auv.autonomyMode:
+                    case 1: #p2p
+                        scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
+                        #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
+                        self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
+                                                     scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
+                    case 2: #following
+                        scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
+                        #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
+                        self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
+                                                     scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
+                    
             scaledPosition = (auvPosition[0] * self.zoomLevel, auvPosition[1] * self.zoomLevel)
             auvShapeScale = max(1,self.zoomLevel)
             self.mainDisplay.create_polygon(\
