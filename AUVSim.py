@@ -22,6 +22,7 @@ MIN_WINDOW_DIM = (726, 402)
 INIT_WINDOW_DIM = (726, 402)
 AUV_COLOR = "white"
 AUV_SELECT_COLOR = "yellow"
+AUV_TARGET_COLOR = "red"
 DISPLAY_COLOR = "black"
 POI_COLOR = "red"
 PATH_COLOR = "gray"
@@ -97,6 +98,7 @@ class AUVSim:
             self.auvs[auv["name"]] = AUV(self.logger, auv["location"], auv["orientation"], auv["name"],\
                                  self.auvModels[auv["model"]], auv["autonomy"])
         self.selectedAUV = None
+        self.targetAUV = None
         self.updateInfoBox1()
         self.updateAUVPath()
     
@@ -219,6 +221,10 @@ class AUVSim:
                 minDis = auvDis
                 closestAUV = auv
         self.selectedAUV = closestAUV
+        if self.selectedAUV != None and self.selectedAUV.autonomyMode == 2:
+            self.targetAUV = self.auvs[self.selectedAUV.targetAUVName]
+        else:
+            self.targetAUV = None
         self.updateAUVPath()
         self.updateInfoBox1()
         self.updateInfoBox2()
@@ -288,7 +294,9 @@ class AUVSim:
                         scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
                         self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
                                                      scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
-                    
+            
+            if self.targetAUV != None and auv.name == self.targetAUV.name:
+                color = AUV_TARGET_COLOR
             scaledPosition = (auvPosition[0] * self.zoomLevel, auvPosition[1] * self.zoomLevel)
             auvShapeScale = max(1,self.zoomLevel)
             self.mainDisplay.create_polygon(\

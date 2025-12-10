@@ -34,7 +34,7 @@
 			"autonomy": {
 				"type": "follow",
 				"target": "Lead1",
-				"offset": [-10, 10, 0]
+				"offset": [-10, 12, 0]
 			}
 		},
 		{
@@ -49,7 +49,7 @@
 			"autonomy": {
 				"type": "follow",
 				"target": "Lead1",
-				"offset": [-10, -10, 0]
+				"offset": [-10, -12, 0]
 			}
 		},
 		{

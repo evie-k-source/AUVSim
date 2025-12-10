@@ -25,39 +25,40 @@ class AUV:
         self.logger.write(message)
     
     def setAutonomy(self, autonomyInfo = {"type": ""}):
-        if(autonomyInfo["type"] == "p2p"):
-            self.autonomyMode = 1
-            self.targets = np.array(autonomyInfo["targets"])
-            self.targetIndex = 0
-            self.targetPosition = np.transpose([self.targets[0]])
-        elif(autonomyInfo["type"] == "lawnmower"):
-            self.autonomyMode = 1
-            targets = []
-            widthSum = 0
-            pathOrientation = autonomyInfo["orientation"]
-            if autonomyInfo["leftTurn"]:
-                pathShift = [autonomyInfo["pathSpan"]*np.cos(pathOrientation - np.pi/2), autonomyInfo["pathSpan"]*np.sin(pathOrientation - np.pi/2)]
-            else:
-                pathShift = [autonomyInfo["pathSpan"]*np.cos(pathOrientation + np.pi/2), autonomyInfo["pathSpan"]*np.sin(pathOrientation + np.pi/2)]
-            lineStart = autonomyInfo["start"]
-            while widthSum < autonomyInfo["totalScanWidth"]:
-                targets.append([lineStart[0], lineStart[1], autonomyInfo["depth"]])
-                targets.append([lineStart[0] + autonomyInfo["pathLength"] * np.cos(pathOrientation), lineStart[1] + autonomyInfo["pathLength"] * np.sin(pathOrientation), autonomyInfo["depth"]])
-                lineStart = [targets[-1][0] + pathShift[0], targets[-1][1] + pathShift[1]]
-                pathOrientation = pathOrientation + np.pi
-                widthSum += autonomyInfo["pathSpan"]
-            self.targets = np.array(targets)
-            self.targetIndex = 0
-            self.targetPosition = np.transpose([self.targets[0]])
-        elif(autonomyInfo["type"] == "follow"):
-            self.targetAUVName = autonomyInfo["target"]
-            self.targetOffset = np.transpose([autonomyInfo["offset"]])
-            self.targets = np.array([])
-            self.followingDeviation = 0
-            self.autonomyMode = 2
-        else:
-            self.autonomyMode = 0 # No autonomy
-            self.targets = np.array([])
+        match autonomyInfo["type"]:
+            case "p2p":
+                self.autonomyMode = 1
+                self.targets = np.array(autonomyInfo["targets"])
+                self.targetIndex = 0
+                self.targetPosition = np.transpose([self.targets[0]])
+            case "lawnmower":
+                self.autonomyMode = 1
+                targets = []
+                widthSum = 0
+                pathOrientation = autonomyInfo["orientation"]
+                if autonomyInfo["leftTurn"]:
+                    pathShift = [autonomyInfo["pathSpan"]*np.cos(pathOrientation - np.pi/2), autonomyInfo["pathSpan"]*np.sin(pathOrientation - np.pi/2)]
+                else:
+                    pathShift = [autonomyInfo["pathSpan"]*np.cos(pathOrientation + np.pi/2), autonomyInfo["pathSpan"]*np.sin(pathOrientation + np.pi/2)]
+                lineStart = autonomyInfo["start"]
+                while widthSum < autonomyInfo["totalScanWidth"]:
+                    targets.append([lineStart[0], lineStart[1], autonomyInfo["depth"]])
+                    targets.append([lineStart[0] + autonomyInfo["pathLength"] * np.cos(pathOrientation), lineStart[1] + autonomyInfo["pathLength"] * np.sin(pathOrientation), autonomyInfo["depth"]])
+                    lineStart = [targets[-1][0] + pathShift[0], targets[-1][1] + pathShift[1]]
+                    pathOrientation = pathOrientation + np.pi
+                    widthSum += autonomyInfo["pathSpan"]
+                self.targets = np.array(targets)
+                self.targetIndex = 0
+                self.targetPosition = np.transpose([self.targets[0]])
+            case "follow":
+                self.targetAUVName = autonomyInfo["target"]
+                self.targetOffset = np.transpose([autonomyInfo["offset"]])
+                self.targets = np.array([])
+                self.followingDeviation = 0
+                self.autonomyMode = 2
+            case _:
+                self.autonomyMode = 0 # No autonomy
+                self.targets = np.array([])
         
         if "followers" in autonomyInfo:
             self.followers = autonomyInfo["followers"]
