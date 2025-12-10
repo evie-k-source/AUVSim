@@ -4,6 +4,7 @@ from AUVUtilities import *
 
 MAX_TARGET_SPEED = 0.5 # m/s
 SEAWATER_DENSITY = 1030 # kg/m3
+FOLLOWER_MAX_DEVIATION = 0.25 # percentage of expected distance
 
 class AUV:
     def __init__(self, logger, position = [0,0,-50], heading = 0, name = "AUV", constants = None, autonomyInfo = [""]):
@@ -43,7 +44,7 @@ class AUV:
                 targets.append([lineStart[0], lineStart[1], autonomyInfo["depth"]])
                 targets.append([lineStart[0] + autonomyInfo["pathLength"] * np.cos(pathOrientation), lineStart[1] + autonomyInfo["pathLength"] * np.sin(pathOrientation), autonomyInfo["depth"]])
                 lineStart = [targets[-1][0] + pathShift[0], targets[-1][1] + pathShift[1]]
-                pathOrientation = np.pi/2 - pathOrientation
+                pathOrientation = pathOrientation + np.pi
                 widthSum += autonomyInfo["pathSpan"]
             self.targets = np.array(targets)
             self.targetIndex = 0
@@ -52,10 +53,16 @@ class AUV:
             self.targetAUVName = autonomyInfo["target"]
             self.targetOffset = np.transpose([autonomyInfo["offset"]])
             self.targets = np.array([])
+            self.followingDeviation = 0
             self.autonomyMode = 2
         else:
             self.autonomyMode = 0 # No autonomy
             self.targets = np.array([])
+        
+        if "followers" in autonomyInfo:
+            self.followers = autonomyInfo["followers"]
+        else:
+            self.followers = []
         
     def initializeKinematics(self, initPosition, initOrientation):
         self.writeLog(f"Initialize {self.name} kinematics")
@@ -91,6 +98,13 @@ class AUV:
             self.targetVelocity = np.zeros([3,1])
             return
         if(self.autonomyMode == 1): # p2p
+        # Check followers Deviation
+            maxFollowerDeviation = 0
+            for followerName in self.followers:
+                if followerName in self.sensorAUVs:
+                    maxFollowerDeviation = max(maxFollowerDeviation, self.sensorAUVs[followerName].followingDeviation)
+            adjustedMaxSpeed = MAX_TARGET_SPEED * (1 - min(maxFollowerDeviation, FOLLOWER_MAX_DEVIATION)/FOLLOWER_MAX_DEVIATION)
+            
             positionError = self.targetPosition - self.sensorPosition
             if(np.mean(np.square(positionError))<4):
                 self.targetIndex = (self.targetIndex + 1) % len(self.targets)
@@ -98,7 +112,7 @@ class AUV:
                 positionError = self.targetPosition - self.sensorPosition
             self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
             unitVectorOrientation = eulerAngleToUnitVector(self.sensorOrientation)
-            self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
+            self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,adjustedMaxSpeed)],[0],[0]])
             return
         if(self.autonomyMode == 2): # follow
             if self.targetAUVName in self.sensorAUVs:
@@ -108,9 +122,11 @@ class AUV:
                 self.targetOrientation = np.array([[0],[0],[np.arctan2(positionError[1,0], positionError[0,0])]])
                 unitVectorOrientation = eulerAngleToUnitVector(self.sensorOrientation)
                 self.targetVelocity = np.array([[np.clip(np.dot(unitVectorOrientation[:,0], positionError[:,0]),0,MAX_TARGET_SPEED)],[0],[0]])
+                self.followingDeviation = np.sqrt(np.sum(np.square(positionError))/np.sum(np.square(self.targetOffset)))
             else:
                 self.targetOrientation = self.sensorOrientation
                 self.targetVelocity = np.zeros([3,1])
+                self.followingDeviation = 0
             return
         self.writeLog("ERROR: Unrecognized Autonomy Mode")
     

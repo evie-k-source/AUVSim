@@ -136,7 +136,7 @@ class AUVSim:
         fileMenu.add_command(label="Open Scenario", command = lambda: self.loadScenarioFromPath(filedialog.askopenfilename(initialdir="scenarios")))
         recentScenarioMenu = tk.Menu(fileMenu,tearoff=0)
         for scenario in self.settings["scenarios"]["recent"]:
-            recentScenarioMenu.add_command(label=scenario,command = lambda: self.loadScenarioFromName(self.settings["scenarios"]["recent"][scenario]))
+            recentScenarioMenu.add_command(label=scenario,command = lambda s=scenario: self.loadScenarioFromName(self.settings["scenarios"]["recent"][s]))
         fileMenu.add_cascade(label="Recent Scenarios",menu=recentScenarioMenu)
         self.menubar.add_cascade(label="File",menu=fileMenu)
         viewMenu = tk.Menu(self.menubar,tearoff=0)
@@ -282,12 +282,10 @@ class AUVSim:
                 match auv.autonomyMode:
                     case 1: #p2p
                         scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
-                        #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
                         self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
                                                      scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
                     case 2: #following
                         scaledTargetPosition = ((self.selectedAUV.targetPosition[0,0] + self.mapOffset[0])*self.zoomLevel, (self.selectedAUV.targetPosition[1,0] + self.mapOffset[1])*self.zoomLevel)
-                        #self.mainDisplay.create_line(auvPosition, [auvPosition[0] + POI_INDICATOR_LENGTH*np.cos(auv.targetOrientation[2,0]), auvPosition[1] + POI_INDICATOR_LENGTH*np.sin(auv.targetOrientation[2,0])], tag = "auv", fill = POI_COLOR)
                         self.mainDisplay.create_oval(scaledTargetPosition[0] - POI_RADIUS, scaledTargetPosition[1] - POI_RADIUS,\
                                                      scaledTargetPosition[0] + POI_RADIUS, scaledTargetPosition[1] + POI_RADIUS, fill = POI_COLOR, tag = "auv")
                     

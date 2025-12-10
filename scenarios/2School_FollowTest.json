@@ -14,16 +14,17 @@
 				"type": "lawnmower",
 				"start": [100,100],
 				"depth": -50,
-				"orientation": 150,
+				"orientation": 240,
 				"pathSpan": 30,
-				"pathLength": 100,
-				"totalScanWidth": 300,
-				"leftTurn": false
+				"pathLength": 300,
+				"totalScanWidth": 100,
+				"leftTurn": true,
+				"followers": ["Follow1a", "Follow1b"]
 			}
 		},
 		{
 			"location":[
-				100, 150, -50
+				120, 120, -50
 			],
 			"orientation":[
 				0, 0, 2.0944
@@ -34,6 +35,72 @@
 				"type": "follow",
 				"target": "Lead1",
 				"offset": [-10, 10, 0]
+			}
+		},
+		{
+			"location":[
+				100, 120, -50
+			],
+			"orientation":[
+				0, 0, 2.0944
+			],
+			"name": "Follow1b",
+			"model": "Orpheus",
+			"autonomy": {
+				"type": "follow",
+				"target": "Lead1",
+				"offset": [-10, -10, 0]
+			}
+		},
+		{
+			"location":[
+				110, 310, -50
+			],
+			"orientation":[
+				0, 0, 0
+			],
+			"name": "Lead2",
+			"model": "Orpheus",
+			"autonomy": {
+				"type": "lawnmower",
+				"start": [100,300],
+				"depth": -50,
+				"orientation": 10,
+				"pathSpan": 50,
+				"pathLength": 400,
+				"totalScanWidth": 200,
+				"leftTurn": false,
+				"followers": ["Follow2a", "Follow2b"]
+			}
+		},
+		{
+			"location":[
+				120, 320, -50
+			],
+			"orientation":[
+				0, 0, 2.0944
+			],
+			"name": "Follow2a",
+			"model": "Orpheus",
+			"autonomy": {
+				"type": "follow",
+				"target": "Lead2",
+				"offset": [-15, 20, 0]
+			}
+		},
+		{
+			"location":[
+				100, 320, -50
+			],
+			"orientation":[
+				0, 0, 2.0944
+			],
+			"name": "Follow2b",
+			"model": "Orpheus",
+			"autonomy": {
+				"type": "follow",
+				"target": "Lead2",
+				"offset": [-15, -20, 0]
 			}
 		}
 	]
