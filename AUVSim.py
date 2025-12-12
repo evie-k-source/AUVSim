@@ -18,6 +18,7 @@ if sys.platform == "win32":
     INFO_BOX_WIDTH = 32
 else:
     INFO_BOX_WIDTH = 40
+INFO_FONT = ("Arial", 12)
 MIN_WINDOW_DIM = (726, 402)
 INIT_WINDOW_DIM = (726, 402)
 AUV_COLOR = "white"
@@ -105,6 +106,7 @@ class AUVSim:
     def setupGUI(self):
         # Root Window
         self.rootWindow = tk.Tk()
+        self.rootWindow.title("AUV Simulator")
         
         # Main Display
         self.mainDisplay = tk.Canvas(self.rootWindow, width = 400, height = 400, bg=DISPLAY_COLOR)
@@ -125,10 +127,10 @@ class AUVSim:
         # Info Box
         self.infoFrame = tk.Frame(self.rootWindow)
         self.infoFrame.grid(row = 0, column = 1, sticky = "nsew")
-        tk.Label(self.infoFrame, text="Info", width = INFO_BOX_WIDTH).grid(row = 0, column = 0, columnspan = 2, sticky = "ew")
-        self.infoBox1 = tk.Label(self.infoFrame)
+        tk.Label(self.infoFrame, text="Info", width = INFO_BOX_WIDTH, font=INFO_FONT).grid(row = 0, column = 0, columnspan = 2, sticky = "ew")
+        self.infoBox1 = tk.Label(self.infoFrame, font=INFO_FONT)
         self.infoBox1.grid(row = 1, column = 0, sticky = "nsew")
-        self.infoBox2 = tk.Label(self.infoFrame)
+        self.infoBox2 = tk.Label(self.infoFrame, font=INFO_FONT)
         self.infoBox2.grid(row = 1, column = 1, sticky = "nsew")
         
         # Menubar
